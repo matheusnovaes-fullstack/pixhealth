@@ -16,6 +16,7 @@ const TIMEOUT_MS = 8000;
 const LATENCIA_LENTA = 2000;
 const LATENCIA_CRITICA = 5000;
 const PORTA = process.env.PORT || 3000;
+const SELF_PING_INTERVAL = 14 * 60 * 1000; // ✅ Keep-Alive: 14 minutos
 
 // ========================================
 // BANCOS MONITORADOS (COM URLS ALTERNATIVAS)
@@ -658,6 +659,38 @@ app.get('/api/status', (req, res) => {
   res.json(ultimosResultados);
 });
 
+// ✅ NOVA ROTA: Health Check para Keep-Alive
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'alive', 
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    bancosMonitorados: BANCOS_MONITORADOS.length,
+    ultimaVerificacao: ultimosResultados.timestamp || null,
+    clientesWebSocket: clientesConectados.length
+  });
+});
+
+// ========================================
+// KEEP-ALIVE (EVITA SPIN-DOWN NO RENDER FREE)
+// ========================================
+function iniciarKeepAlive() {
+  setInterval(async () => {
+    try {
+      const selfUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORTA}`;
+      const response = await axios.get(`${selfUrl}/api/health`, { 
+        timeout: 5000,
+        headers: { 'User-Agent': 'Internal-KeepAlive/1.0' }
+      });
+      console.log(`[Keep-Alive] ✅ Self-ping OK - Uptime: ${response.data.uptime}s`);
+    } catch (erro) {
+      console.log(`[Keep-Alive] ⚠️ Erro: ${erro.message}`);
+    }
+  }, SELF_PING_INTERVAL);
+  
+  console.log(`[Keep-Alive] 🔄 Configurado para ${SELF_PING_INTERVAL / 60000} minutos`);
+}
+
 // ========================================
 // INICIAR SERVIDOR
 // ========================================
@@ -665,8 +698,9 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(80));
   console.log('🏦 Bank Health Monitor v2.1 - Sistema Híbrido Inteligente');
   console.log('='.repeat(80));
-  console.log(`\n📊 Dashboard: http://localhost:${PORTA}`);
+  console.log(`\n📊 Dashboard: http://0.0.0.0:${PORTA}`);
   console.log(`⏱️  Intervalo: ${INTERVALO_SEGUNDOS} segundos`);
+  console.log(`🔄 Keep-Alive: Self-ping a cada 14 minutos`);
   console.log(`🏦 Bancos monitorados: ${BANCOS_MONITORADOS.length}`);
   console.log('\n🚀 Recursos:');
   console.log('  ✅ Múltiplas URLs por instituição');
@@ -676,6 +710,7 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('  ✅ Classificação de prioridade (P1-P4)');
   console.log('  ✅ Baseline adaptativo');
   console.log('  ✅ WebSocket em tempo real');
+  console.log('  ✅ Anti spin-down automático');
   console.log('\n📈 Thresholds:');
   console.log(`  OK: < ${LATENCIA_LENTA}ms`);
   console.log(`  LENTO: ${LATENCIA_LENTA}-${LATENCIA_CRITICA}ms`);
@@ -688,6 +723,12 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('  4. Protegido/Bloqueado (10% confiança)');
   console.log('='.repeat(80) + '\n');
   
+  // ✅ Iniciar Keep-Alive
+  iniciarKeepAlive();
+  
+  // Primeira execução imediata
   monitorarBancos();
+  
+  // Execuções periódicas
   setInterval(monitorarBancos, INTERVALO_SEGUNDOS * 1000);
 });
