@@ -12,7 +12,7 @@ const INTERVALO_SEGUNDOS = 10;
 const TIMEOUT_MS = 5000;
 const LATENCIA_LENTA = 2000;
 const LATENCIA_CRITICA = 5000;
-const PORTA = 3000;
+const PORTA = process.env.PORT || 3000;
 
 const BANCOS_MONITORADOS = [
   { 
