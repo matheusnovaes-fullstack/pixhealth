@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Health Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 5px;
+            letter-spacing: -0.5px;
+        }
+
+        .version {
+            font-size: 12px;
+            color: #4ade80;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .header-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .ultima-checagem {
+            background: #1a1a1a;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #888;
+            border: 1px solid #2a2a2a;
+        }
+
+        .ultima-checagem strong {
+            color: #fff;
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .btn-atualizar {
+            background: #1a4d2e;
+            color: #4ade80;
+            border: 1px solid #2d5f3f;
+            padding: 13px 30px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-atualizar:hover {
+            background: #2d5f3f;
+            transform: translateY(-1px);
+        }
+
+        .btn-atualizar:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-info {
+            background: #1a1a1a;
+            color: #888;
+            border: 1px solid #2a2a2a;
+            padding: 13px 20px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-info:hover {
+            background: #2a2a2a;
+            color: #4ade80;
+        }
+
+        .legenda-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border: 2px solid #2d5f3f;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 900px;
+            width: 90%;
+            z-index: 2000;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .legenda-popup.ativo {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        .legenda-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1999;
+        }
+
+        .legenda-overlay.ativo {
+            display: block;
+        }
+
+        .legenda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .legenda-header h2 {
+            font-size: 22px;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .btn-fechar {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-fechar:hover {
+            background: #2a2a2a;
+            color: #fff;
+        }
+
+        .legenda-secao {
+            margin-bottom: 30px;
+        }
+
+        .legenda-secao h3 {
+            font-size: 16px;
+            color: #4ade80;
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .legenda-item {
+            background: #0f0f0f;
+            border-left: 3px solid #2a2a2a;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+        }
+
+        .legenda-item-titulo {
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .legenda-item-desc {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .legenda-item.ok {
+            border-left-color: #4ade80;
+        }
+
+        .legenda-item.lento {
+            border-left-color: #fbbf24;
+        }
+
+        .legenda-item.critico {
+            border-left-color: #ef4444;
+        }
+
+        .legenda-item.erro {
+            border-left-color: #6b7280;
+        }
+
+        .legenda-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .bancos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .banco-card {
+            background: #1a3d2a;
+            border: 2px solid #2d5f3f;
+            border-radius: 14px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        .banco-card:hover {
+            transform: translateY(-2px);
+            border-color: #4ade80;
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.1);
+        }
+
+        .banco-card.lento {
+            background: #3d2e1a;
+            border-color: #5f4a2d;
+        }
+
+        .banco-card.crítico {
+            background: #3d1a1a;
+            border-color: #5f2d2d;
+            animation: pulse-border 2s infinite;
+        }
+
+        .banco-card.erro {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { border-color: #5f2d2d; }
+            50% { 
+                border-color: #dc3545;
+                box-shadow: 0 0 20px rgba(220, 53, 69, 0.3);
+            }
+        }
+
+        .banco-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .banco-nome-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ade80;
+            flex-shrink: 0;
+        }
+
+        .banco-card.lento .status-dot {
+            background: #fbbf24;
+        }
+
+        .banco-card.crítico .status-dot {
+            background: #ef4444;
+            animation: pulse-dot 2s infinite;
+        }
+
+        .banco-card.erro .status-dot {
+            background: #6b7280;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .banco-nome {
+            font-size: 17px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .banco-card.ok .status-badge {
+            background: #1a4d2e;
+            color: #4ade80;
+        }
+
+        .banco-card.lento .status-badge {
+            background: #3d2e1a;
+            color: #fbbf24;
+        }
+
+        .banco-card.crítico .status-badge {
+            background: #3d1a1a;
+            color: #ef4444;
+        }
+
+        .banco-card.erro .status-badge {
+            background: #2a2a2a;
+            color: #888;
+        }
+
+        .banco-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #888;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .info-destaque {
+            background: #0f0f0f;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            border-left: 3px solid #4ade80;
+        }
+
+        .info-destaque.warning {
+            border-left-color: #fbbf24;
+        }
+
+        .info-destaque.danger {
+            border-left-color: #ef4444;
+        }
+
+        .severidade-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .severidade-nenhum {
+            background: #1a4d2e;
+            color: #4ade80;
+        }
+
+        .severidade-baixo {
+            background: #2a2a2a;
+            color: #888;
+        }
+
+        .severidade-moderado {
+            background: #3d2e1a;
+            color: #fbbf24;
+        }
+
+        .severidade-alto {
+            background: #3d2e1a;
+            color: #fb923c;
+        }
+
+        .severidade-critico {
+            background: #3d1a1a;
+            color: #ef4444;
+        }
+
+        .info-protecao {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1a4d2e;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #4ade80;
+            line-height: 1.5;
+        }
+
+        .conexao-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+            color: #888;
+        }
+
+        .conexao-status.conectado {
+            border-color: #2d5f3f;
+            color: #4ade80;
+        }
+
+        .conexao-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .conexao-status.conectado .conexao-dot {
+            background: #4ade80;
+            animation: pulse-dot 2s infinite;
+        }
+
+        .loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px;
+            color: #888;
+            font-size: 16px;
+        }
+
+        @media (max-width: 1024px) {
+            .legenda-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .bancos-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .conexao-status {
+                top: 10px;
+                right: 10px;
+            }
+
+            .legenda-popup {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="conexao-status" id="conexaoStatus">
+        <div class="conexao-dot"></div>
+        <span id="conexaoTexto">Conectando...</span>
+    </div>
+
+    <div class="legenda-overlay" id="legendaOverlay" onclick="fecharLegenda()"></div>
+    
+    <div class="legenda-popup" id="legendaPopup">
+        <div class="legenda-header">
+            <h2>Como Interpretar os Dados</h2>
+            <button class="btn-fechar" onclick="fecharLegenda()">×</button>
+        </div>
+
+        <div class="legenda-secao">
+            <h3>Status da Instituição</h3>
+            <div class="legenda-grid">
+                <div class="legenda-item ok">
+                    <div class="legenda-item-titulo">OK</div>
+                    <div class="legenda-item-desc">Sistema operacional. Latência inferior a 2000ms e todos os endpoints respondendo normalmente.</div>
+                </div>
+                <div class="legenda-item lento">
+                    <div class="legenda-item-titulo">LENTO</div>
+                    <div class="legenda-item-desc">Degradação de performance. Latência entre 2000-5000ms ou alguns endpoints inacessíveis.</div>
+                </div>
+                <div class="legenda-item critico">
+                    <div class="legenda-item-titulo">CRÍTICO</div>
+                    <div class="legenda-item-desc">Problema grave. Latência superior a 5000ms, erro HTTP 5xx ou maioria dos endpoints fora.</div>
+                </div>
+                <div class="legenda-item erro">
+                    <div class="legenda-item-titulo">ERRO</div>
+                    <div class="legenda-item-desc">Sistema offline. Timeout em todas as requisições ou todos os endpoints inacessíveis.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legenda-secao">
+            <h3>Métricas de Performance</h3>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Latência</div>
+                <div class="legenda-item-desc">Tempo de resposta atual em milissegundos. Valores inferiores a 1000ms são ideais. Acima de 3000ms indica possível problema.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Baseline</div>
+                <div class="legenda-item-desc">Média histórica das últimas 30 medições. Serve como referência para detectar anomalias. Atualizado continuamente.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Proporção</div>
+                <div class="legenda-item-desc">Relação entre latência atual e baseline. Valor 1.0x = normal. Acima de 3x indica degradação significativa.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">URLs Online</div>
+                <div class="legenda-item-desc">Quantidade de endpoints respondendo corretamente. Formato: online/total. Menos que 100% indica problema parcial.</div>
+            </div>
+        </div>
+
+        <div class="legenda-secao">
+            <h3>Score de Severidade (QUANTO MAIOR, PIOR)</h3>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Como Funciona</div>
+                <div class="legenda-item-desc">Sistema de pontuação (0-100%) que mede a GRAVIDADE do problema. 0% = tudo normal, 100% = problema gravíssimo. Baseado em: código HTTP, latência absoluta, proporção vs baseline, persistência e quantidade de URLs afetadas.</div>
+            </div>
+            <div class="legenda-grid">
+                <div class="legenda-item critico">
+                    <div class="legenda-item-titulo">80-100% - CRÍTICO</div>
+                    <div class="legenda-item-desc">Problema grave confirmado. Requer ação imediata.</div>
+                </div>
+                <div class="legenda-item lento">
+                    <div class="legenda-item-titulo">60-79% - ALTO</div>
+                    <div class="legenda-item-desc">Problema confirmado. Investigar em 5 minutos.</div>
+                </div>
+                <div class="legenda-item lento">
+                    <div class="legenda-item-titulo">40-59% - MODERADO</div>
+                    <div class="legenda-item-desc">Degradação detectada. Monitorar evolução.</div>
+                </div>
+                <div class="legenda-item">
+                    <div class="legenda-item-titulo">20-39% - BAIXO</div>
+                    <div class="legenda-item-desc">Anomalia leve. Nenhuma ação necessária.</div>
+                </div>
+                <div class="legenda-item ok">
+                    <div class="legenda-item-titulo">0-19% - NENHUM</div>
+                    <div class="legenda-item-desc">Sistema operacional e saudável.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legenda-secao">
+            <h3>Classificação de Prioridade</h3>
+            <div class="legenda-item critico">
+                <div class="legenda-item-titulo">P1 - CRÍTICO</div>
+                <div class="legenda-item-desc">Status crítico ou erro com severidade ≥70%. Ação: Alertar equipe imediatamente.</div>
+            </div>
+            <div class="legenda-item lento">
+                <div class="legenda-item-titulo">P2 - URGENTE</div>
+                <div class="legenda-item-desc">Problema confirmado com severidade ≥50%. Ação: Investigar em até 5 minutos.</div>
+            </div>
+            <div class="legenda-item lento">
+                <div class="legenda-item-titulo">P3 - ATENÇÃO</div>
+                <div class="legenda-item-desc">Lentidão com severidade ≥30%. Ação: Monitorar próximas verificações.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">P4 - INFO</div>
+                <div class="legenda-item-desc">Sistema operacional ou baixa severidade. Ação: Nenhuma.</div>
+            </div>
+        </div>
+
+        <div class="legenda-secao">
+            <h3>Indicadores Especiais</h3>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Protegido (HTTP 403)</div>
+                <div class="legenda-item-desc">Site possui proteção anti-bot (Cloudflare/WAF). Não indica instabilidade. Sistema está online, mas bloqueia requisições automatizadas.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Problema Isolado</div>
+                <div class="legenda-item-desc">Quando apenas uma instituição apresenta problema enquanto 75%+ das demais estão normais. Aumenta score de severidade.</div>
+            </div>
+            <div class="legenda-item">
+                <div class="legenda-item-titulo">Persistente</div>
+                <div class="legenda-item-desc">Problema detectado em 3+ verificações consecutivas. Indica que não é intermitência momentânea.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Bank Health Monitor</h1>
+            <div class="version">Pix Heatlh</div>
+            
+            <div class="header-controls">
+                <div class="ultima-checagem">
+                    Última verificação
+                    <strong id="ultimaAtualizacao">--:--:--</strong>
+                </div>
+                <button class="btn-atualizar" onclick="forcarAtualizacao()">Atualizar Agora</button>
+                <button class="btn-info" onclick="abrirLegenda()">Como Interpretar</button>
+            </div>
+        </div>
+
+        <div class="bancos-grid" id="bancosGrid">
+            <div class="loading">Carregando dados das instituições...</div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let tentativasReconexao = 0;
+        const maxTentativas = 5;
+        
+        function abrirLegenda() {
+            document.getElementById('legendaPopup').classList.add('ativo');
+            document.getElementById('legendaOverlay').classList.add('ativo');
+        }
+        
+        function fecharLegenda() {
+            document.getElementById('legendaPopup').classList.remove('ativo');
+            document.getElementById('legendaOverlay').classList.remove('ativo');
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                fecharLegenda();
+            }
+        });
+        
+        function conectarWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = protocol + '//' + window.location.host;
+            
+            console.log('[WebSocket] Conectando...');
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('[WebSocket] Conectado');
+                    tentativasReconexao = 0;
+                    document.getElementById('conexaoStatus').className = 'conexao-status conectado';
+                    document.getElementById('conexaoTexto').textContent = 'Online';
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const mensagem = JSON.parse(event.data);
+                        if (mensagem.tipo === 'atualizacao') {
+                            atualizarDashboard(mensagem.dados);
+                        }
+                    } catch (erro) {
+                        console.error('[WebSocket] Erro ao processar mensagem:', erro);
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('[WebSocket] Erro de conexão');
+                };
+                
+                ws.onclose = () => {
+                    console.log('[WebSocket] Desconectado');
+                    document.getElementById('conexaoStatus').className = 'conexao-status';
+                    document.getElementById('conexaoTexto').textContent = 'Offline';
+                    
+                    if (tentativasReconexao < maxTentativas) {
+                        tentativasReconexao++;
+                        setTimeout(conectarWebSocket, 3000);
+                    }
+                };
+            } catch (erro) {
+                console.error('[WebSocket] Erro ao criar conexão:', erro);
+            }
+        }
+        
+        function atualizarDashboard(dados) {
+            const dataAtualizacao = new Date(dados.timestamp);
+            document.getElementById('ultimaAtualizacao').textContent = 
+                dataAtualizacao.toLocaleTimeString('pt-BR');
+            
+            const grid = document.getElementById('bancosGrid');
+            grid.innerHTML = '';
+            
+            const bancosOrdenados = dados.bancos.sort((a, b) => {
+                const ordemStatus = { 'CRÍTICO': 0, 'ERRO': 1, 'LENTO': 2, 'OK': 3 };
+                if (ordemStatus[a.status] !== ordemStatus[b.status]) {
+                    return ordemStatus[a.status] - ordemStatus[b.status];
+                }
+                return (b.severidade?.score || 0) - (a.severidade?.score || 0);
+            });
+            
+            bancosOrdenados.forEach(banco => {
+                const card = criarCardBanco(banco);
+                grid.appendChild(card);
+            });
+        }
+        
+        function criarCardBanco(banco) {
+            const card = document.createElement('div');
+            card.className = 'banco-card ' + banco.status.toLowerCase();
+            
+            let severidadeClasse = 'severidade-nenhum';
+            if (banco.severidade?.score >= 80) severidadeClasse = 'severidade-critico';
+            else if (banco.severidade?.score >= 60) severidadeClasse = 'severidade-alto';
+            else if (banco.severidade?.score >= 40) severidadeClasse = 'severidade-moderado';
+            else if (banco.severidade?.score >= 20) severidadeClasse = 'severidade-baixo';
+            
+            let infoHtml = '';
+            
+            if (banco.status === 'ERRO') {
+                infoHtml = `
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value" style="color: #ef4444;">Offline</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">URLs Online:</span>
+                        <span class="info-value">${banco.urlsOnline}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Baseline:</span>
+                        <span class="info-value">${banco.baseline}ms</span>
+                    </div>
+                `;
+            } else {
+                let latenciaDisplay, latenciaColor;
+                
+                if (banco.protegido || banco.latencia === 'Protegido') {
+                    latenciaDisplay = 'Protegido';
+                    latenciaColor = '#4ade80';
+                } else {
+                    latenciaDisplay = banco.latencia + 'ms';
+                    latenciaColor = banco.latencia >= 5000 ? '#ef4444' : 
+                                   (banco.latencia >= 2000 ? '#fbbf24' : '#4ade80');
+                }
+                
+                infoHtml = `
+                    <div class="info-row">
+                        <span class="info-label">Latência:</span>
+                        <span class="info-value" style="color: ${latenciaColor};">${latenciaDisplay}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Baseline:</span>
+                        <span class="info-value">${banco.baseline}ms</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Proporção:</span>
+                        <span class="info-value">${banco.proporcao}x</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">URLs Online:</span>
+                        <span class="info-value">${banco.urlsOnline}</span>
+                    </div>
+                `;
+            }
+            
+            if (banco.severidade) {
+                const classeDestaque = banco.severidade.score >= 80 ? 'danger' : 
+                                      (banco.severidade.score >= 60 ? 'warning' : '');
+                
+                infoHtml += `
+                    <div class="info-destaque ${classeDestaque}">
+                        <div class="info-row">
+                            <span class="info-label">Severidade:</span>
+                            <span class="severidade-badge ${severidadeClasse}">
+                                ${banco.severidade.score}% - ${banco.severidade.nivel}
+                            </span>
+                        </div>
+                        ${banco.severidade.fatores.length > 0 ? `
+                            <div style="margin-top: 8px; font-size: 12px; color: #aaa;">
+                                ${banco.severidade.fatores.join(' • ')}
+                            </div>
+                        ` : ''}
+                        ${banco.prioridade ? `
+                            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+                                Prioridade: ${banco.prioridade.nivel} | ${banco.prioridade.acao}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            if (banco.protegido) {
+                infoHtml += `
+                    <div class="info-protecao">
+                        Site protegido por Cloudflare/WAF (HTTP 403). Sistema online, mas bloqueia requisições automatizadas.
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="banco-header">
+                    <div class="banco-nome-wrapper">
+                        <div class="status-dot"></div>
+                        <div class="banco-nome">${banco.nome}</div>
+                    </div>
+                    <div class="status-badge">${banco.status}</div>
+                </div>
+                <div class="banco-info">
+                    ${infoHtml}
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function forcarAtualizacao() {
+            const btn = document.querySelector('.btn-atualizar');
+            btn.textContent = 'Atualizando...';
+            btn.disabled = true;
+            
+            fetch('/api/status')
+                .then(res => res.json())
+                .then(dados => {
+                    if (dados && dados.bancos) {
+                        atualizarDashboard(dados);
+                    }
+                    btn.textContent = 'Atualizar Agora';
+                    btn.disabled = false;
+                })
+                .catch(erro => {
+                    console.error('[API] Erro ao buscar dados:', erro);
+                    btn.textContent = 'Erro - Tentar Novamente';
+                    btn.disabled = false;
+                });
+        }
+        
+        setTimeout(() => {
+            conectarWebSocket();
+            forcarAtualizacao();
+        }, 500);
+    </script>
+</body>
+</html>

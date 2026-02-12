@@ -1,0 +1,40 @@
+{
+  "name": "downdetector-api",
+  "version": "2.1.1",
+  "description": "Unofficial APIs for downdetector.com",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint ./",
+    "test": "nyc mocha --timeout 5000 --exit",
+    "coverage": "nyc --reporter=lcov --reporter=text mocha --timeout 5000 --exit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavideViolante/downdetector-api.git"
+  },
+  "keywords": [
+    "downdetector",
+    "api",
+    "node",
+    "crisis",
+    "down",
+    "service",
+    "downtime"
+  ],
+  "author": "Davide Violante",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DavideViolante/downdetector-api/issues"
+  },
+  "homepage": "https://github.com/DavideViolante/downdetector-api#readme",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "puppeteer": "^24.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-google": "^0.14.0",
+    "mocha": "^11.1.0",
+    "nyc": "^17.1.0"
+  }
+}
