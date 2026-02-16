@@ -81,6 +81,8 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .btn-atualizar:hover {
@@ -646,7 +648,7 @@
                     Última verificação
                     <strong id="ultimaAtualizacao">--:--:--</strong>
                 </div>
-                <button class="btn-atualizar" onclick="forcarAtualizacao()">Atualizar Agora</button>
+                <a href="/relatorios.html" class="btn-atualizar">Relatórios</a>
                 <button class="btn-info" onclick="abrirLegenda()">Como Interpretar</button>
             </div>
         </div>
@@ -854,30 +856,16 @@
             return card;
         }
         
-        function forcarAtualizacao() {
-            const btn = document.querySelector('.btn-atualizar');
-            btn.textContent = 'Atualizando...';
-            btn.disabled = true;
-            
+        setTimeout(() => {
+            conectarWebSocket();
             fetch('/api/status')
                 .then(res => res.json())
                 .then(dados => {
                     if (dados && dados.bancos) {
                         atualizarDashboard(dados);
                     }
-                    btn.textContent = 'Atualizar Agora';
-                    btn.disabled = false;
                 })
-                .catch(erro => {
-                    console.error('[API] Erro ao buscar dados:', erro);
-                    btn.textContent = 'Erro - Tentar Novamente';
-                    btn.disabled = false;
-                });
-        }
-        
-        setTimeout(() => {
-            conectarWebSocket();
-            forcarAtualizacao();
+                .catch(erro => console.error('[API] Erro:', erro));
         }, 500);
     </script>
 </body>
