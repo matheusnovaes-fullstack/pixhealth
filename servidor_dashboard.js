@@ -8,19 +8,13 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// ========================================
-// CONFIGURAÇÕES
-// ========================================
 const INTERVALO_SEGUNDOS = process.env.INTERVALO_MONITORAMENTO || 60;
 const TIMEOUT_MS = 8000;
 const LATENCIA_LENTA = 2000;
 const LATENCIA_CRITICA = 5000;
 const PORTA = process.env.PORT || 3000;
-const SELF_PING_INTERVAL = 14 * 60 * 1000; // ✅ Keep-Alive: 14 minutos
+const SELF_PING_INTERVAL = 14 * 60 * 1000;
 
-// ========================================
-// BANCOS MONITORADOS (COM URLS ALTERNATIVAS)
-// ========================================
 const BANCOS_MONITORADOS = [
   { 
     id: 'nubank', 
@@ -116,12 +110,11 @@ const BANCOS_MONITORADOS = [
 let ultimosResultados = [];
 let clientesConectados = [];
 let historicoLatencias = {};
+let historicoTimeouts = {};
+let historicoDia = [];
 
 app.use(express.static('public'));
 
-// ========================================
-// WEBSOCKET
-// ========================================
 wss.on('connection', (ws) => {
   console.log('[WebSocket] Cliente conectado');
   clientesConectados.push(ws);
@@ -152,16 +145,11 @@ wss.on('connection', (ws) => {
   });
 });
 
-// ========================================
-// INICIALIZAR HISTÓRICO
-// ========================================
 BANCOS_MONITORADOS.forEach(banco => {
   historicoLatencias[banco.id] = [];
+  historicoTimeouts[banco.id] = [];
 });
 
-// ========================================
-// CALCULAR BASELINE
-// ========================================
 function calcularBaseline(bancoId) {
   const banco = BANCOS_MONITORADOS.find(b => b.id === bancoId);
   const historico = historicoLatencias[bancoId] || [];
@@ -180,9 +168,18 @@ function calcularBaseline(bancoId) {
   return Math.round(soma / ultimas.length);
 }
 
-// ========================================
-// VERIFICAR STATUS API OFICIAL
-// ========================================
+function calcularTimeoutRate(bancoId) {
+  const historico = historicoTimeouts[bancoId] || [];
+  
+  if (historico.length === 0) {
+    return 0;
+  }
+  
+  const ultimas = historico.slice(-100);
+  const timeouts = ultimas.filter(t => t === true).length;
+  return parseFloat(((timeouts / ultimas.length) * 100).toFixed(2));
+}
+
 async function verificarStatusAPI(url) {
   try {
     const response = await axios.get(url, { 
@@ -204,9 +201,6 @@ async function verificarStatusAPI(url) {
   }
 }
 
-// ========================================
-// VERIFICAR DOWNDETECTOR
-// ========================================
 async function verificarDowndetector(url) {
   try {
     const response = await axios.get(url, { 
@@ -235,15 +229,9 @@ async function verificarDowndetector(url) {
   }
 }
 
-// ========================================
-// TESTAR BANCO INTELIGENTE (HÍBRIDO)
-// ========================================
 async function testarBanco(banco) {
   console.log(`[${banco.nome}] Iniciando verificação...`);
   
-  // ========================================
-  // FASE 1: TENTAR URLs DIRETAS
-  // ========================================
   for (const url of banco.urls) {
     try {
       const inicioURL = Date.now();
@@ -265,13 +253,17 @@ async function testarBanco(banco) {
       
       const latencia = Date.now() - inicioURL;
       
-      // Sucesso! URL funciona
       if (response.status >= 200 && response.status < 400) {
-        console.log(`[${banco.nome}] ✅ URL direta OK: ${url} (${latencia}ms)`);
+        console.log(`[${banco.nome}] URL direta OK: ${url} (${latencia}ms)`);
         
         historicoLatencias[banco.id].push(latencia);
         if (historicoLatencias[banco.id].length > 50) {
           historicoLatencias[banco.id].shift();
+        }
+        
+        historicoTimeouts[banco.id].push(false);
+        if (historicoTimeouts[banco.id].length > 100) {
+          historicoTimeouts[banco.id].shift();
         }
         
         const baseline = calcularBaseline(banco.id);
@@ -298,32 +290,37 @@ async function testarBanco(banco) {
           urlsOffline: 0,
           urlUsada: url.replace('https://', '').substring(0, 40),
           fonte: 'URL Direta',
-          confianca: 100
+          confianca: 100,
+          timeout_rate: calcularTimeoutRate(banco.id)
         };
       }
       
-      // HTTP 403 - Continua testando outras
       if (response.status === 403) {
-        console.log(`[${banco.nome}] ⚠️ HTTP 403 em ${url}, tentando próxima...`);
+        console.log(`[${banco.nome}] HTTP 403 em ${url}, tentando próxima...`);
         continue;
       }
       
     } catch (erro) {
-      console.log(`[${banco.nome}] ❌ Erro em ${url}: ${erro.code || erro.message}`);
+      console.log(`[${banco.nome}] Erro em ${url}: ${erro.code || erro.message}`);
+      
+      if (erro.code === 'ECONNABORTED' || erro.code === 'ETIMEDOUT') {
+        historicoTimeouts[banco.id].push(true);
+        if (historicoTimeouts[banco.id].length > 100) {
+          historicoTimeouts[banco.id].shift();
+        }
+      }
+      
       continue;
     }
   }
   
-  // ========================================
-  // FASE 2: TENTAR STATUS API OFICIAL
-  // ========================================
   if (banco.statusAPI) {
     console.log(`[${banco.nome}] Tentando Status API oficial...`);
     
     const statusAPI = await verificarStatusAPI(banco.statusAPI);
     
     if (statusAPI) {
-      console.log(`[${banco.nome}] ✅ Status API: ${statusAPI.online ? 'Online' : 'Problema'}`);
+      console.log(`[${banco.nome}] Status API: ${statusAPI.online ? 'Online' : 'Problema'}`);
       
       const baseline = calcularBaseline(banco.id);
       
@@ -341,21 +338,19 @@ async function testarBanco(banco) {
         urlsOffline: statusAPI.online ? 0 : 1,
         fonte: 'Status API Oficial',
         confianca: 95,
-        statusOficial: statusAPI
+        statusOficial: statusAPI,
+        timeout_rate: calcularTimeoutRate(banco.id)
       };
     }
   }
   
-  // ========================================
-  // FASE 3: TENTAR DOWNDETECTOR
-  // ========================================
   if (banco.downdetectorURL) {
     console.log(`[${banco.nome}] Tentando Downdetector...`);
     
     const downdetector = await verificarDowndetector(banco.downdetectorURL);
     
     if (downdetector) {
-      console.log(`[${banco.nome}] ✅ Downdetector: ${downdetector.reclamacoes} reclamações`);
+      console.log(`[${banco.nome}] Downdetector: ${downdetector.reclamacoes} reclamações`);
       
       const baseline = calcularBaseline(banco.id);
       
@@ -373,15 +368,13 @@ async function testarBanco(banco) {
         urlsOffline: downdetector.online ? 0 : 1,
         fonte: 'Downdetector',
         confianca: 70,
-        downdetectorReclamacoes: downdetector.reclamacoes
+        downdetectorReclamacoes: downdetector.reclamacoes,
+        timeout_rate: calcularTimeoutRate(banco.id)
       };
     }
   }
   
-  // ========================================
-  // FASE 4: NENHUMA FONTE FUNCIONOU - PROTEGIDO
-  // ========================================
-  console.log(`[${banco.nome}] ⚠️ Todas URLs bloqueadas (HTTP 403)`);
+  console.log(`[${banco.nome}] Todas URLs bloqueadas (HTTP 403)`);
   
   const baseline = calcularBaseline(banco.id);
   
@@ -399,18 +392,15 @@ async function testarBanco(banco) {
     urlsOffline: 0,
     protegido: true,
     fonte: 'Bloqueado (Cloudflare/WAF)',
-    confianca: 10
+    confianca: 10,
+    timeout_rate: calcularTimeoutRate(banco.id)
   };
 }
 
-// ========================================
-// CALCULAR SEVERIDADE
-// ========================================
 function calcularScoreSeveridade(banco, resultado, todosResultados) {
   let score = 0;
   let fatores = [];
   
-  // Se é protegido, severidade baixa
   if (resultado.protegido) {
     return {
       score: 5,
@@ -420,13 +410,11 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     };
   }
   
-  // Avaliar código HTTP
   if (resultado.statusCode >= 500 && resultado.statusCode < 600) {
     score += 40;
     fatores.push('Erro 5xx');
   }
   
-  // Avaliar latência
   const lat = typeof resultado.latencia === 'number' ? resultado.latencia : 0;
   if (lat >= 10000) {
     score += 40;
@@ -442,7 +430,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     fatores.push('Latência 2s+');
   }
   
-  // Avaliar proporção
   const prop = parseFloat(resultado.proporcao);
   if (resultado.baseline > 0 && prop >= 8) {
     score += 30;
@@ -455,7 +442,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     fatores.push(prop + 'x lento');
   }
   
-  // Avaliar status
   if (resultado.status === 'ERRO') {
     score += 45;
     fatores.push('Timeout/Offline');
@@ -466,7 +452,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     fatores.push('Status crítico');
   }
   
-  // Avaliar URLs offline
   if (resultado.urlsOffline && resultado.urlsOffline >= 2) {
     score += 20;
     fatores.push(resultado.urlsOffline + ' URLs fora');
@@ -475,7 +460,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     fatores.push('1 URL fora');
   }
   
-  // Problema isolado
   if (todosResultados && todosResultados.length > 3) {
     const outrosOK = todosResultados.filter(b => 
       b.id !== banco.id && b.status === 'OK'
@@ -489,7 +473,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     }
   }
   
-  // Persistência
   const historico = historicoLatencias[banco.id] || [];
   if (historico.length >= 3) {
     const ultimos3 = historico.slice(-3);
@@ -502,14 +485,12 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
     }
   }
   
-  // Status OK sem problemas
   if (resultado.status === 'OK' && score === 0) {
     fatores.push('Saudável');
   }
   
   score = Math.min(score, 100);
   
-  // Determinar nível
   let nivel, classificacao;
   if (score >= 80) {
     nivel = 'CRÍTICO';
@@ -531,9 +512,6 @@ function calcularScoreSeveridade(banco, resultado, todosResultados) {
   return { score, nivel, classificacao, fatores };
 }
 
-// ========================================
-// CLASSIFICAR PRIORIDADE
-// ========================================
 function classificarPrioridade(banco) {
   const { status, severidade } = banco;
   
@@ -575,9 +553,6 @@ function classificarPrioridade(banco) {
   };
 }
 
-// ========================================
-// MONITORAR TODOS OS BANCOS
-// ========================================
 async function monitorarBancos() {
   const timestampInicio = Date.now();
   const hora = new Date().toLocaleTimeString('pt-BR');
@@ -593,7 +568,6 @@ async function monitorarBancos() {
     await new Promise(resolve => setTimeout(resolve, 200));
   }
   
-  // Calcular severidade e prioridade
   resultados.forEach(resultado => {
     const bancoConfig = BANCOS_MONITORADOS.find(b => b.id === resultado.id);
     resultado.severidade = calcularScoreSeveridade(bancoConfig, resultado, resultados);
@@ -611,20 +585,20 @@ async function monitorarBancos() {
   const alertasUrgentes = resultados.filter(r => r.prioridade.nivel === 'P2_URGENTE');
   
   if (alertasCriticos.length > 0) {
-    console.log('\n🚨 [ALERTA CRÍTICO]');
+    console.log('\n[ALERTA CRÍTICO]');
     alertasCriticos.forEach(b => {
       console.log(`  ${b.nome}: Severidade ${b.severidade.score}% | ${b.severidade.fatores.join(', ')}`);
     });
   }
   
   if (alertasUrgentes.length > 0) {
-    console.log('\n⚠️  [ALERTA URGENTE]');
+    console.log('\n[ALERTA URGENTE]');
     alertasUrgentes.forEach(b => {
       console.log(`  ${b.nome}: Severidade ${b.severidade.score}% | ${b.severidade.fatores.join(', ')}`);
     });
   }
   
-  console.log(`\n✅ [RESUMO] ${tempoTotal}s | OK: ${ok} | Lentos: ${lentos} | Críticos: ${criticos} | Erros: ${erros}`);
+  console.log(`\n[RESUMO] ${tempoTotal}s | OK: ${ok} | Lentos: ${lentos} | Críticos: ${criticos} | Erros: ${erros}`);
   console.log('='.repeat(80) + '\n');
   
   ultimosResultados = {
@@ -633,6 +607,31 @@ async function monitorarBancos() {
     bancos: resultados,
     resumo: { criticos, alertas: lentos, ok, erros, total: resultados.length }
   };
+  
+  historicoDia.push({
+    timestamp: new Date().toISOString(),
+    hora: new Date().toLocaleTimeString('pt-BR'),
+    bancos: resultados.map(r => ({
+      id: r.id,
+      nome: r.nome,
+      status: r.status,
+      latencia: typeof r.latencia === 'number' ? r.latencia : null,
+      baseline: r.baseline,
+      severidade: r.severidade.score,
+      fonte: r.fonte,
+      timeout_rate: r.timeout_rate
+    }))
+  });
+  
+  if (historicoDia.length > 1440) {
+    historicoDia.shift();
+  }
+  
+  const agora = new Date();
+  if (agora.getHours() === 0 && agora.getMinutes() === 0) {
+    console.log('[SISTEMA] Resetando histórico do dia (meia-noite)');
+    historicoDia = [];
+  }
   
   const mensagem = JSON.stringify({
     tipo: 'atualizacao',
@@ -647,19 +646,13 @@ async function monitorarBancos() {
   
   try {
     fs.appendFileSync('monitoramento_bancos.log', JSON.stringify(ultimosResultados) + '\n');
-  } catch (e) {
-    // Ignora erro de log
-  }
+  } catch (e) {}
 }
 
-// ========================================
-// API REST
-// ========================================
 app.get('/api/status', (req, res) => {
   res.json(ultimosResultados);
 });
 
-// ✅ NOVA ROTA: Health Check para Keep-Alive
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'alive', 
@@ -667,13 +660,127 @@ app.get('/api/health', (req, res) => {
     uptime: Math.floor(process.uptime()),
     bancosMonitorados: BANCOS_MONITORADOS.length,
     ultimaVerificacao: ultimosResultados.timestamp || null,
-    clientesWebSocket: clientesConectados.length
+    clientesWebSocket: clientesConectados.length,
+    historicoSize: historicoDia.length
   });
 });
 
-// ========================================
-// KEEP-ALIVE (EVITA SPIN-DOWN NO RENDER FREE)
-// ========================================
+app.get('/api/metrics', (req, res) => {
+  if (!ultimosResultados || !ultimosResultados.bancos) {
+    return res.json([]);
+  }
+  
+  const metricas = ultimosResultados.bancos.map(banco => ({
+    timestamp: banco.timestamp,
+    instituicao: banco.nome,
+    latencia_ms: typeof banco.latencia === 'number' ? banco.latencia : null,
+    status: banco.status,
+    timeout_rate: banco.timeout_rate || 0,
+    http_code: banco.statusCode,
+    endpoint: banco.urlUsada || banco.fonte
+  }));
+  
+  res.json(metricas);
+});
+
+app.get('/api/historico', (req, res) => {
+  const { inicio, fim, banco } = req.query;
+  
+  let dados = [...historicoDia];
+  
+  if (inicio && fim) {
+    dados = dados.filter(item => {
+      const hora = new Date(item.timestamp).getHours();
+      const horaInicio = parseInt(inicio);
+      const horaFim = parseInt(fim);
+      return hora >= horaInicio && hora <= horaFim;
+    });
+  }
+  
+  if (banco) {
+    dados = dados.map(item => ({
+      ...item,
+      bancos: item.bancos.filter(b => b.id === banco)
+    }));
+  }
+  
+  res.json({
+    total: dados.length,
+    periodo: {
+      inicio: dados[0]?.timestamp || null,
+      fim: dados[dados.length - 1]?.timestamp || null
+    },
+    dados
+  });
+});
+
+app.get('/api/oscilacoes', (req, res) => {
+  if (historicoDia.length < 10) {
+    return res.json({
+      mensagem: 'Dados insuficientes (mínimo 10 verificações)',
+      horarioCritico: null,
+      resumoPorHora: []
+    });
+  }
+  
+  const porHora = {};
+  
+  historicoDia.forEach(item => {
+    const hora = new Date(item.timestamp).getHours();
+    
+    if (!porHora[hora]) {
+      porHora[hora] = {
+        hora: `${hora.toString().padStart(2, '0')}:00`,
+        verificacoes: 0,
+        totalOscilacao: 0,
+        bancosAfetados: new Set()
+      };
+    }
+    
+    item.bancos.forEach(banco => {
+      if (banco.latencia && banco.baseline) {
+        const desvio = Math.abs(banco.latencia - banco.baseline);
+        const oscilacao = (desvio / banco.baseline) * 100;
+        
+        if (oscilacao > 50) {
+          porHora[hora].totalOscilacao += oscilacao;
+          porHora[hora].bancosAfetados.add(banco.nome);
+        }
+      }
+    });
+    
+    porHora[hora].verificacoes++;
+  });
+  
+  let horarioCritico = null;
+  let maiorOscilacao = 0;
+  
+  Object.values(porHora).forEach(hora => {
+    const oscilacaoMedia = hora.totalOscilacao / hora.verificacoes;
+    
+    if (oscilacaoMedia > maiorOscilacao) {
+      maiorOscilacao = oscilacaoMedia;
+      horarioCritico = {
+        hora: hora.hora,
+        oscilacaoMedia: oscilacaoMedia.toFixed(2),
+        bancosAfetados: Array.from(hora.bancosAfetados),
+        totalBancos: hora.bancosAfetados.size,
+        verificacoes: hora.verificacoes
+      };
+    }
+  });
+  
+  res.json({
+    horarioCritico,
+    resumoPorHora: Object.values(porHora).map(h => ({
+      hora: h.hora,
+      oscilacaoTotal: h.totalOscilacao.toFixed(2),
+      bancosAfetados: h.bancosAfetados.size,
+      verificacoes: h.verificacoes
+    })).sort((a, b) => a.hora.localeCompare(b.hora))
+  });
+});
+
 function iniciarKeepAlive() {
   setInterval(async () => {
     try {
@@ -682,53 +789,55 @@ function iniciarKeepAlive() {
         timeout: 5000,
         headers: { 'User-Agent': 'Internal-KeepAlive/1.0' }
       });
-      console.log(`[Keep-Alive] ✅ Self-ping OK - Uptime: ${response.data.uptime}s`);
+      console.log(`[Keep-Alive] Self-ping OK - Uptime: ${response.data.uptime}s | Histórico: ${response.data.historicoSize} registros`);
     } catch (erro) {
-      console.log(`[Keep-Alive] ⚠️ Erro: ${erro.message}`);
+      console.log(`[Keep-Alive] Erro: ${erro.message}`);
     }
   }, SELF_PING_INTERVAL);
   
-  console.log(`[Keep-Alive] 🔄 Configurado para ${SELF_PING_INTERVAL / 60000} minutos`);
+  console.log(`[Keep-Alive] Configurado para ${SELF_PING_INTERVAL / 60000} minutos`);
 }
 
-// ========================================
-// INICIAR SERVIDOR
-// ========================================
 server.listen(PORTA, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(80));
-  console.log('🏦 Bank Health Monitor v2.1 - Sistema Híbrido Inteligente');
+  console.log('Bank Health Monitor v2.2 - Sistema Híbrido Inteligente + Relatórios');
   console.log('='.repeat(80));
-  console.log(`\n📊 Dashboard: http://0.0.0.0:${PORTA}`);
-  console.log(`⏱️  Intervalo: ${INTERVALO_SEGUNDOS} segundos`);
-  console.log(`🔄 Keep-Alive: Self-ping a cada 14 minutos`);
-  console.log(`🏦 Bancos monitorados: ${BANCOS_MONITORADOS.length}`);
-  console.log('\n🚀 Recursos:');
-  console.log('  ✅ Múltiplas URLs por instituição');
-  console.log('  ✅ Status API oficial (Itaú, Nubank, Inter, C6)');
-  console.log('  ✅ Fallback Downdetector (Itaú, BB, BTG)');
-  console.log('  ✅ Score de severidade (0-100%)');
-  console.log('  ✅ Classificação de prioridade (P1-P4)');
-  console.log('  ✅ Baseline adaptativo');
-  console.log('  ✅ WebSocket em tempo real');
-  console.log('  ✅ Anti spin-down automático');
-  console.log('\n📈 Thresholds:');
+  console.log(`\nDashboard: http://0.0.0.0:${PORTA}`);
+  console.log(`Relatórios: http://0.0.0.0:${PORTA}/relatorios.html`);
+  console.log(`Intervalo: ${INTERVALO_SEGUNDOS} segundos`);
+  console.log(`Keep-Alive: Self-ping a cada 14 minutos`);
+  console.log(`Bancos monitorados: ${BANCOS_MONITORADOS.length}`);
+  console.log('\nRecursos:');
+  console.log('  Múltiplas URLs por instituição');
+  console.log('  Status API oficial (Itaú, Nubank, Inter, C6)');
+  console.log('  Fallback Downdetector (Itaú, BB, BTG)');
+  console.log('  Score de severidade (0-100%)');
+  console.log('  Classificação de prioridade (P1-P4)');
+  console.log('  Baseline adaptativo');
+  console.log('  WebSocket em tempo real');
+  console.log('  Anti spin-down automático');
+  console.log('  Histórico do dia com filtros');
+  console.log('  Análise de oscilações');
+  console.log('  Timeout rate tracking');
+  console.log('\nThresholds:');
   console.log(`  OK: < ${LATENCIA_LENTA}ms`);
   console.log(`  LENTO: ${LATENCIA_LENTA}-${LATENCIA_CRITICA}ms`);
   console.log(`  CRÍTICO: > ${LATENCIA_CRITICA}ms`);
   console.log(`  ERRO: Timeout ou offline`);
-  console.log('\n💡 Fontes de Dados:');
+  console.log('\nFontes de Dados:');
   console.log('  1. URL Direta (100% confiança)');
   console.log('  2. Status API Oficial (95% confiança)');
   console.log('  3. Downdetector (70% confiança)');
   console.log('  4. Protegido/Bloqueado (10% confiança)');
+  console.log('\nAPIs Disponíveis:');
+  console.log('  GET /api/status - Status atual');
+  console.log('  GET /api/health - Health check');
+  console.log('  GET /api/metrics - Métricas simplificadas');
+  console.log('  GET /api/historico - Histórico do dia');
+  console.log('  GET /api/oscilacoes - Análise de oscilações');
   console.log('='.repeat(80) + '\n');
   
-  // ✅ Iniciar Keep-Alive
   iniciarKeepAlive();
-  
-  // Primeira execução imediata
   monitorarBancos();
-  
-  // Execuções periódicas
   setInterval(monitorarBancos, INTERVALO_SEGUNDOS * 1000);
 });
