@@ -1,5 +1,5 @@
 require('./keepalive');
-
+process.env.TZ = 'America/Sao_Paulo';
 const express = require('express');
 const axios = require('axios');
 const WebSocket = require('ws');
