@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatórios - Bank Health Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      border: 1px solid #2a2a2a;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      color: #fff;
+      margin-bottom: 5px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    
+    .header p {
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .destaque {
+      background: #1a1a1a;
+      border: 2px solid #5f2d2d;
+      padding: 25px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+    }
+    
+    .destaque h2 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #ef4444;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .destaque .info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    
+    .destaque .info-item {
+      background: #0f0f0f;
+      padding: 15px;
+      border-radius: 10px;
+      border-left: 3px solid #ef4444;
+    }
+    
+    .destaque .info-item label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    
+    .destaque .info-item value {
+      display: block;
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+    }
+    
+    .filtros {
+      background: #1a1a1a;
+      padding: 25px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      border: 1px solid #2a2a2a;
+    }
+    
+    .filtros h3 {
+      margin-bottom: 20px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .filtros-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .filtros label {
+      display: block;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .filtros select,
+    .filtros input {
+      width: 100%;
+      padding: 12px;
+      background: #0f0f0f;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #fff;
+      transition: border-color 0.2s;
+    }
+    
+    .filtros select:focus,
+    .filtros input:focus {
+      outline: none;
+      border-color: #4ade80;
+    }
+    
+    .btn {
+      background: #1a4d2e;
+      color: #4ade80;
+      border: 1px solid #2d5f3f;
+      padding: 13px 30px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover {
+      background: #2d5f3f;
+      transform: translateY(-1px);
+    }
+    
+    .graficos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .grafico-card {
+      background: #1a1a1a;
+      padding: 25px;
+      border-radius: 14px;
+      border: 1px solid #2a2a2a;
+    }
+    
+    .grafico-card h3 {
+      color: #fff;
+      margin-bottom: 20px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .tabela {
+      background: #1a1a1a;
+      padding: 25px;
+      border-radius: 14px;
+      border: 1px solid #2a2a2a;
+      overflow-x: auto;
+    }
+    
+    .tabela h3 {
+      color: #fff;
+      margin-bottom: 20px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th {
+      background: #0f0f0f;
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+      color: #888;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #2a2a2a;
+      color: #fff;
+      font-size: 14px;
+    }
+    
+    tr:hover {
+      background: #0f0f0f;
+    }
+    
+    .status-ok { color: #4ade80; font-weight: 600; }
+    .status-lento { color: #fbbf24; font-weight: 600; }
+    .status-critico { color: #ef4444; font-weight: 600; }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .voltar {
+      display: inline-block;
+      margin-bottom: 20px;
+      padding: 10px 20px;
+      background: #1a1a1a;
+      color: #888;
+      text-decoration: none;
+      border-radius: 10px;
+      border: 1px solid #2a2a2a;
+      transition: all 0.2s;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .voltar:hover {
+      background: #2a2a2a;
+      color: #4ade80;
+    }
+    
+    @media (max-width: 768px) {
+      .graficos {
+        grid-template-columns: 1fr;
+      }
+      
+      .filtros-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="voltar">← Voltar ao Dashboard</a>
+    
+    <div class="header">
+      <h1>Relatórios e Análises</h1>
+      <p>Histórico completo do dia com análise de oscilações</p>
+    </div>
+    
+    <div id="destaque" class="destaque">
+      <h2>Horário Mais Crítico do Dia</h2>
+      <div class="info" id="info-destaque">
+        <div class="loading">Carregando análise...</div>
+      </div>
+    </div>
+    
+    <div class="filtros">
+      <h3>Filtros</h3>
+      <div class="filtros-grid">
+        <div>
+          <label>Banco</label>
+          <select id="filtro-banco">
+            <option value="">Todos os bancos</option>
+          </select>
+        </div>
+        <div>
+          <label>Hora Início</label>
+          <input type="number" id="filtro-inicio" min="0" max="23" placeholder="Ex: 8">
+        </div>
+        <div>
+          <label>Hora Fim</label>
+          <input type="number" id="filtro-fim" min="0" max="23" placeholder="Ex: 18">
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+          <button class="btn" onclick="aplicarFiltros()">Aplicar Filtros</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="graficos">
+      <div class="grafico-card">
+        <h3>Desvio Médio por Hora (ms)</h3>
+        <canvas id="grafico-latencia"></canvas>
+      </div>
+      <div class="grafico-card">
+        <h3>Oscilações por Hora</h3>
+        <canvas id="grafico-oscilacoes"></canvas>
+      </div>
+    </div>
+    
+    <div class="tabela">
+  <h3>Histórico Detalhado</h3>
+  <table id="tabela-historico">
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Banco</th>
+        <th>Latência (ms)</th>
+        <th>Baseline</th>
+        <th>Desvio</th>
+        <th>Status</th>
+        <th>Severidade</th>
+      </tr>
+    </thead>
+    <tbody id="tbody-historico">
+      <tr><td colspan="7" class="loading">Carregando dados...</td></tr>
+    </tbody>
+  </table>
+  <div id="btn-ver-mais-container" style="display: none; text-align: center; margin-top: 20px;">
+    <button class="btn" onclick="carregarMaisRegistros()">Ver Mais</button>
+  </div>
+</div>
+
+  
+  <script>
+    let dadosCompletos = [];
+let graficoLatencia, graficoOscilacoes;
+let registrosVisiveis = 10;
+let todosRegistros = [];
+
+async function carregarBancos() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    
+    const select = document.getElementById('filtro-banco');
+    data.bancos.forEach(banco => {
+      const option = document.createElement('option');
+      option.value = banco.id;
+      option.textContent = banco.nome;
+      select.appendChild(option);
+    });
+  } catch (erro) {
+    console.error('Erro ao carregar bancos:', erro);
+  }
+}
+
+async function carregarOscilacoes() {
+  try {
+    const res = await fetch('/api/historico');
+    const data = await res.json();
+    
+    const infoDestaque = document.getElementById('info-destaque');
+    
+    if (!data.dados || data.dados.length === 0) {
+      infoDestaque.innerHTML = '<div class="info-item"><label>Status</label><value>Aguardando dados...</value></div>';
+      return;
+    }
+    
+    let maiorLatencia = 0;
+    let bancoMaisLento = '';
+    let horarioProblema = '';
+    let totalVerificacoes = data.dados.length;
+    
+    data.dados.forEach(item => {
+      item.bancos.forEach(banco => {
+        if (banco.latencia && typeof banco.latencia === 'number') {
+          if (banco.latencia > maiorLatencia) {
+            maiorLatencia = banco.latencia;
+            bancoMaisLento = banco.nome;
+            horarioProblema = item.hora;
+          }
+        }
+      });
+    });
+    
+    infoDestaque.innerHTML = `
+      <div class="info-item">
+        <label>Horário</label>
+        <value>${horarioProblema}</value>
+      </div>
+      <div class="info-item">
+        <label>Maior Latência</label>
+        <value>${maiorLatencia}ms</value>
+      </div>
+      <div class="info-item">
+        <label>Banco</label>
+        <value>${bancoMaisLento}</value>
+      </div>
+      <div class="info-item">
+        <label>Verificações</label>
+        <value>${totalVerificacoes}</value>
+      </div>
+    `;
+    
+  } catch (erro) {
+    console.error('Erro ao carregar oscilações:', erro);
+  }
+}
+
+async function carregarHistorico(params = '') {
+  try {
+    const res = await fetch(`/api/historico${params}`);
+    const data = await res.json();
+    
+    dadosCompletos = data.dados;
+    
+    registrosVisiveis = 10;
+    processarRegistros(data.dados);
+    atualizarGraficoLatencia(data.dados);
+    atualizarGraficoOscilacoesFiltrado(data.dados);
+    
+  } catch (erro) {
+    console.error('Erro ao carregar histórico:', erro);
+  }
+}
+
+function processarRegistros(dados) {
+  todosRegistros = [];
+  
+  if (dados.length === 0) {
+    document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="7" class="loading">Nenhum dado disponível para o filtro selecionado</td></tr>';
+    document.getElementById('btn-ver-mais-container').style.display = 'none';
+    return;
+  }
+  
+  const dadosOrdenados = [...dados].reverse();
+  
+  dadosOrdenados.forEach(item => {
+    item.bancos.forEach(banco => {
+      if (banco.latencia === null) return;
+      
+      const desvio = ((banco.latencia - banco.baseline) / banco.baseline * 100).toFixed(1);
+      const statusClass = banco.status === 'OK' ? 'status-ok' : banco.status === 'LENTO' ? 'status-lento' : 'status-critico';
+      
+      todosRegistros.push({
+        hora: item.hora,
+        banco: banco.nome,
+        latencia: banco.latencia,
+        baseline: banco.baseline,
+        desvio: desvio,
+        status: banco.status,
+        statusClass: statusClass,
+        severidade: banco.severidade
+      });
+    });
+  });
+  
+  atualizarTabela();
+}
+
+function atualizarTabela() {
+  const tbody = document.getElementById('tbody-historico');
+  const btnContainer = document.getElementById('btn-ver-mais-container');
+  
+  const registrosParaMostrar = todosRegistros.slice(0, registrosVisiveis);
+  
+  let html = '';
+  
+  registrosParaMostrar.forEach(registro => {
+    html += `
+      <tr>
+        <td>${registro.hora}</td>
+        <td><strong>${registro.banco}</strong></td>
+        <td>${registro.latencia}ms</td>
+        <td>${registro.baseline}ms</td>
+        <td>${registro.desvio > 0 ? '+' : ''}${registro.desvio}%</td>
+        <td class="${registro.statusClass}">${registro.status}</td>
+        <td>${registro.severidade}%</td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+  
+  if (registrosVisiveis < todosRegistros.length) {
+    btnContainer.style.display = 'block';
+  } else {
+    btnContainer.style.display = 'none';
+  }
+}
+
+function carregarMaisRegistros() {
+  registrosVisiveis += 10;
+  atualizarTabela();
+}
+
+function atualizarGraficoLatencia(dados) {
+  const ctx = document.getElementById('grafico-latencia');
+  
+  const porHora = {};
+  
+  dados.forEach(item => {
+    const hora = item.hora.substring(0, 5);
+    
+    if (!porHora[hora]) {
+      porHora[hora] = { total: 0, count: 0 };
+    }
+    
+    item.bancos.forEach(banco => {
+      if (banco.latencia) {
+        porHora[hora].total += banco.latencia;
+        porHora[hora].count++;
+      }
+    });
+  });
+  
+  const labels = Object.keys(porHora).sort();
+  const dataValues = labels.map(hora => (porHora[hora].total / porHora[hora].count).toFixed(0));
+  
+  if (graficoLatencia) graficoLatencia.destroy();
+  
+  graficoLatencia = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Latência Média (ms)',
+        data: dataValues,
+        borderColor: '#4ade80',
+        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { 
+          display: false
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true,
+          grid: {
+            color: '#2a2a2a'
+          },
+          ticks: {
+            color: '#888'
+          }
+        },
+        x: {
+          grid: {
+            color: '#2a2a2a'
+          },
+          ticks: {
+            color: '#888'
+          }
+        }
+      }
+    }
+  });
+}
+
+function atualizarGraficoOscilacoesFiltrado(dados) {
+  const ctx = document.getElementById('grafico-oscilacoes');
+  
+  const porHora = {};
+  
+  dados.forEach(item => {
+    const hora = item.hora.substring(0, 5);
+    
+    if (!porHora[hora]) {
+      porHora[hora] = {
+        totalDesvio: 0,
+        bancosAfetados: 0,
+        totalBancos: 0
+      };
+    }
+    
+    item.bancos.forEach(banco => {
+      porHora[hora].totalBancos++;
+      
+      if (banco.latencia && banco.baseline && typeof banco.latencia === 'number') {
+        const desvio = Math.abs(banco.latencia - banco.baseline);
+        
+        if (desvio > 200) {
+          porHora[hora].totalDesvio += desvio;
+          porHora[hora].bancosAfetados++;
+        }
+      }
+    });
+  });
+  
+  const labels = Object.keys(porHora).sort();
+  const dataValues = labels.map(hora => {
+    if (porHora[hora].bancosAfetados === 0) return 0;
+    return (porHora[hora].totalDesvio / porHora[hora].bancosAfetados).toFixed(0);
+  });
+  
+  if (graficoOscilacoes) graficoOscilacoes.destroy();
+  
+  graficoOscilacoes = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Desvio Médio (ms)',
+        data: dataValues,
+        backgroundColor: 'rgba(245, 87, 108, 0.6)',
+        borderColor: '#f5576c',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { 
+          display: false
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true,
+          grid: {
+            color: '#2a2a2a'
+          },
+          ticks: {
+            color: '#888',
+            callback: function(value) {
+              return value + 'ms';
+            }
+          }
+        },
+        x: {
+          grid: {
+            color: '#2a2a2a'
+          },
+          ticks: {
+            color: '#888'
+          }
+        }
+      }
+    }
+  });
+}
+
+
+function aplicarFiltros() {
+  const banco = document.getElementById('filtro-banco').value;
+  const inicio = document.getElementById('filtro-inicio').value;
+  const fim = document.getElementById('filtro-fim').value;
+  
+  let params = '?';
+  if (banco) params += `banco=${banco}&`;
+  if (inicio) params += `inicio=${inicio}&`;
+  if (fim) params += `fim=${fim}&`;
+  
+  carregarHistorico(params);
+}
+
+carregarBancos();
+carregarOscilacoes();
+carregarHistorico();
+
+setInterval(() => {
+  carregarOscilacoes();
+  if (!document.getElementById('filtro-banco').value && 
+      !document.getElementById('filtro-inicio').value && 
+      !document.getElementById('filtro-fim').value) {
+    carregarHistorico();
+  }
+}, 60000);
+
+  </script>
+</body>
+</html>
