@@ -159,6 +159,34 @@
       background: #2d5f3f;
       transform: translateY(-1px);
     }
+
+    /* ── BOTÃO EXPORTAR ── */
+    .btn-exportar {
+      background: #1a2d4d;
+      color: #60a5fa;
+      border: 1px solid #2d3f5f;
+      padding: 13px 30px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-exportar:hover {
+      background: #2d3f5f;
+      transform: translateY(-1px);
+    }
+
+    .btn-exportar.loading {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
     
     .graficos {
       display: grid;
@@ -262,6 +290,10 @@
       .filtros-grid {
         grid-template-columns: 1fr;
       }
+
+      .acoes-filtro {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
@@ -298,9 +330,17 @@
           <label>Hora Fim</label>
           <input type="number" id="filtro-fim" min="0" max="23" placeholder="Ex: 18">
         </div>
-        <div style="display: flex; align-items: flex-end;">
-          <button class="btn" onclick="aplicarFiltros()">Aplicar Filtros</button>
-        </div>
+      </div>
+
+      <!-- BOTÕES: Aplicar Filtros + Exportar CSV -->
+      <div class="acoes-filtro" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+        <button class="btn" onclick="aplicarFiltros()">Aplicar Filtros</button>
+        <button class="btn-exportar" id="btn-exportar" onclick="exportarCSV()">
+          📥 Exportar dia em CSV
+        </button>
+        <span id="export-feedback" style="font-size: 13px; color: #4ade80; display: none;">
+          ✅ Download iniciado!
+        </span>
       </div>
     </div>
     
@@ -316,370 +356,367 @@
     </div>
     
     <div class="tabela">
-  <h3>Histórico Detalhado</h3>
-  <table id="tabela-historico">
-    <thead>
-      <tr>
-        <th>Hora</th>
-        <th>Banco</th>
-        <th>Latência (ms)</th>
-        <th>Baseline</th>
-        <th>Desvio</th>
-        <th>Status</th>
-        <th>Severidade</th>
-      </tr>
-    </thead>
-    <tbody id="tbody-historico">
-      <tr><td colspan="7" class="loading">Carregando dados...</td></tr>
-    </tbody>
-  </table>
-  <div id="btn-ver-mais-container" style="display: none; text-align: center; margin-top: 20px;">
-    <button class="btn" onclick="carregarMaisRegistros()">Ver Mais</button>
-  </div>
-</div>
+      <h3>Histórico Detalhado</h3>
+      <table id="tabela-historico">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Banco</th>
+            <th>Latência (ms)</th>
+            <th>Baseline</th>
+            <th>Desvio</th>
+            <th>Status</th>
+            <th>Severidade</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-historico">
+          <tr><td colspan="7" class="loading">Carregando dados...</td></tr>
+        </tbody>
+      </table>
+      <div id="btn-ver-mais-container" style="display: none; text-align: center; margin-top: 20px;">
+        <button class="btn" onclick="carregarMaisRegistros()">Ver Mais</button>
+      </div>
+    </div>
 
+  </div>
   
   <script>
     let dadosCompletos = [];
-let graficoLatencia, graficoOscilacoes;
-let registrosVisiveis = 10;
-let todosRegistros = [];
+    let graficoLatencia, graficoOscilacoes;
+    let registrosVisiveis = 10;
+    let todosRegistros = [];
 
-async function carregarBancos() {
-  try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    
-    const select = document.getElementById('filtro-banco');
-    data.bancos.forEach(banco => {
-      const option = document.createElement('option');
-      option.value = banco.id;
-      option.textContent = banco.nome;
-      select.appendChild(option);
-    });
-  } catch (erro) {
-    console.error('Erro ao carregar bancos:', erro);
-  }
-}
-
-async function carregarOscilacoes() {
-  try {
-    const res = await fetch('/api/historico');
-    const data = await res.json();
-    
-    const infoDestaque = document.getElementById('info-destaque');
-    
-    if (!data.dados || data.dados.length === 0) {
-      infoDestaque.innerHTML = '<div class="info-item"><label>Status</label><value>Aguardando dados...</value></div>';
-      return;
-    }
-    
-    let maiorLatencia = 0;
-    let bancoMaisLento = '';
-    let horarioProblema = '';
-    let totalVerificacoes = data.dados.length;
-    
-    data.dados.forEach(item => {
-      item.bancos.forEach(banco => {
-        if (banco.latencia && typeof banco.latencia === 'number') {
-          if (banco.latencia > maiorLatencia) {
-            maiorLatencia = banco.latencia;
-            bancoMaisLento = banco.nome;
-            horarioProblema = item.hora;
-          }
-        }
-      });
-    });
-    
-    infoDestaque.innerHTML = `
-      <div class="info-item">
-        <label>Horário</label>
-        <value>${horarioProblema}</value>
-      </div>
-      <div class="info-item">
-        <label>Maior Latência</label>
-        <value>${maiorLatencia}ms</value>
-      </div>
-      <div class="info-item">
-        <label>Banco</label>
-        <value>${bancoMaisLento}</value>
-      </div>
-      <div class="info-item">
-        <label>Verificações</label>
-        <value>${totalVerificacoes}</value>
-      </div>
-    `;
-    
-  } catch (erro) {
-    console.error('Erro ao carregar oscilações:', erro);
-  }
-}
-
-async function carregarHistorico(params = '') {
-  try {
-    const res = await fetch(`/api/historico${params}`);
-    const data = await res.json();
-    
-    dadosCompletos = data.dados;
-    
-    registrosVisiveis = 10;
-    processarRegistros(data.dados);
-    atualizarGraficoLatencia(data.dados);
-    atualizarGraficoOscilacoesFiltrado(data.dados);
-    
-  } catch (erro) {
-    console.error('Erro ao carregar histórico:', erro);
-  }
-}
-
-function processarRegistros(dados) {
-  todosRegistros = [];
-  
-  if (dados.length === 0) {
-    document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="7" class="loading">Nenhum dado disponível para o filtro selecionado</td></tr>';
-    document.getElementById('btn-ver-mais-container').style.display = 'none';
-    return;
-  }
-  
-  const dadosOrdenados = [...dados].reverse();
-  
-  dadosOrdenados.forEach(item => {
-    item.bancos.forEach(banco => {
-      if (banco.latencia === null) return;
-      
-      const desvio = ((banco.latencia - banco.baseline) / banco.baseline * 100).toFixed(1);
-      const statusClass = banco.status === 'OK' ? 'status-ok' : banco.status === 'LENTO' ? 'status-lento' : 'status-critico';
-      
-      todosRegistros.push({
-        hora: item.hora,
-        banco: banco.nome,
-        latencia: banco.latencia,
-        baseline: banco.baseline,
-        desvio: desvio,
-        status: banco.status,
-        statusClass: statusClass,
-        severidade: banco.severidade
-      });
-    });
-  });
-  
-  atualizarTabela();
-}
-
-function atualizarTabela() {
-  const tbody = document.getElementById('tbody-historico');
-  const btnContainer = document.getElementById('btn-ver-mais-container');
-  
-  const registrosParaMostrar = todosRegistros.slice(0, registrosVisiveis);
-  
-  let html = '';
-  
-  registrosParaMostrar.forEach(registro => {
-    html += `
-      <tr>
-        <td>${registro.hora}</td>
-        <td><strong>${registro.banco}</strong></td>
-        <td>${registro.latencia}ms</td>
-        <td>${registro.baseline}ms</td>
-        <td>${registro.desvio > 0 ? '+' : ''}${registro.desvio}%</td>
-        <td class="${registro.statusClass}">${registro.status}</td>
-        <td>${registro.severidade}%</td>
-      </tr>
-    `;
-  });
-  
-  tbody.innerHTML = html;
-  
-  if (registrosVisiveis < todosRegistros.length) {
-    btnContainer.style.display = 'block';
-  } else {
-    btnContainer.style.display = 'none';
-  }
-}
-
-function carregarMaisRegistros() {
-  registrosVisiveis += 10;
-  atualizarTabela();
-}
-
-function atualizarGraficoLatencia(dados) {
-  const ctx = document.getElementById('grafico-latencia');
-  
-  const porHora = {};
-  
-  dados.forEach(item => {
-    const hora = item.hora.substring(0, 5);
-    
-    if (!porHora[hora]) {
-      porHora[hora] = { total: 0, count: 0 };
-    }
-    
-    item.bancos.forEach(banco => {
-      if (banco.latencia) {
-        porHora[hora].total += banco.latencia;
-        porHora[hora].count++;
-      }
-    });
-  });
-  
-  const labels = Object.keys(porHora).sort();
-  const dataValues = labels.map(hora => (porHora[hora].total / porHora[hora].count).toFixed(0));
-  
-  if (graficoLatencia) graficoLatencia.destroy();
-  
-  graficoLatencia = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Latência Média (ms)',
-        data: dataValues,
-        borderColor: '#4ade80',
-        backgroundColor: 'rgba(74, 222, 128, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { 
-          display: false
-        }
-      },
-      scales: {
-        y: { 
-          beginAtZero: true,
-          grid: {
-            color: '#2a2a2a'
-          },
-          ticks: {
-            color: '#888'
-          }
-        },
-        x: {
-          grid: {
-            color: '#2a2a2a'
-          },
-          ticks: {
-            color: '#888'
-          }
-        }
-      }
-    }
-  });
-}
-
-function atualizarGraficoOscilacoesFiltrado(dados) {
-  const ctx = document.getElementById('grafico-oscilacoes');
-  
-  const porHora = {};
-  
-  dados.forEach(item => {
-    const hora = item.hora.substring(0, 5);
-    
-    if (!porHora[hora]) {
-      porHora[hora] = {
-        totalDesvio: 0,
-        bancosAfetados: 0,
-        totalBancos: 0
-      };
-    }
-    
-    item.bancos.forEach(banco => {
-      porHora[hora].totalBancos++;
-      
-      if (banco.latencia && banco.baseline && typeof banco.latencia === 'number') {
-        const desvio = Math.abs(banco.latencia - banco.baseline);
+    async function carregarBancos() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
         
-        if (desvio > 200) {
-          porHora[hora].totalDesvio += desvio;
-          porHora[hora].bancosAfetados++;
-        }
+        const select = document.getElementById('filtro-banco');
+        data.bancos.forEach(banco => {
+          const option = document.createElement('option');
+          option.value = banco.id;
+          option.textContent = banco.nome;
+          select.appendChild(option);
+        });
+      } catch (erro) {
+        console.error('Erro ao carregar bancos:', erro);
       }
-    });
-  });
-  
-  const labels = Object.keys(porHora).sort();
-  const dataValues = labels.map(hora => {
-    if (porHora[hora].bancosAfetados === 0) return 0;
-    return (porHora[hora].totalDesvio / porHora[hora].bancosAfetados).toFixed(0);
-  });
-  
-  if (graficoOscilacoes) graficoOscilacoes.destroy();
-  
-  graficoOscilacoes = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Desvio Médio (ms)',
-        data: dataValues,
-        backgroundColor: 'rgba(245, 87, 108, 0.6)',
-        borderColor: '#f5576c',
-        borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { 
-          display: false
+    }
+
+    async function carregarOscilacoes() {
+      try {
+        const res = await fetch('/api/historico');
+        const data = await res.json();
+        
+        const infoDestaque = document.getElementById('info-destaque');
+        
+        if (!data.dados || data.dados.length === 0) {
+          infoDestaque.innerHTML = '<div class="info-item"><label>Status</label><value>Aguardando dados...</value></div>';
+          return;
         }
-      },
-      scales: {
-        y: { 
-          beginAtZero: true,
-          grid: {
-            color: '#2a2a2a'
-          },
-          ticks: {
-            color: '#888',
-            callback: function(value) {
-              return value + 'ms';
+        
+        let maiorLatencia = 0;
+        let bancoMaisLento = '';
+        let horarioProblema = '';
+        let totalVerificacoes = data.dados.length;
+        
+        data.dados.forEach(item => {
+          item.bancos.forEach(banco => {
+            if (banco.latencia && typeof banco.latencia === 'number') {
+              if (banco.latencia > maiorLatencia) {
+                maiorLatencia = banco.latencia;
+                bancoMaisLento = banco.nome;
+                horarioProblema = item.hora;
+              }
+            }
+          });
+        });
+        
+        infoDestaque.innerHTML = `
+          <div class="info-item">
+            <label>Horário</label>
+            <value>${horarioProblema}</value>
+          </div>
+          <div class="info-item">
+            <label>Maior Latência</label>
+            <value>${maiorLatencia}ms</value>
+          </div>
+          <div class="info-item">
+            <label>Banco</label>
+            <value>${bancoMaisLento}</value>
+          </div>
+          <div class="info-item">
+            <label>Verificações</label>
+            <value>${totalVerificacoes}</value>
+          </div>
+        `;
+        
+      } catch (erro) {
+        console.error('Erro ao carregar oscilações:', erro);
+      }
+    }
+
+    async function carregarHistorico(params = '') {
+      try {
+        const res = await fetch(`/api/historico${params}`);
+        const data = await res.json();
+        
+        dadosCompletos = data.dados;
+        
+        registrosVisiveis = 10;
+        processarRegistros(data.dados);
+        atualizarGraficoLatencia(data.dados);
+        atualizarGraficoOscilacoesFiltrado(data.dados);
+        
+      } catch (erro) {
+        console.error('Erro ao carregar histórico:', erro);
+      }
+    }
+
+    function processarRegistros(dados) {
+      todosRegistros = [];
+      
+      if (dados.length === 0) {
+        document.getElementById('tbody-historico').innerHTML = '<tr><td colspan="7" class="loading">Nenhum dado disponível para o filtro selecionado</td></tr>';
+        document.getElementById('btn-ver-mais-container').style.display = 'none';
+        return;
+      }
+      
+      const dadosOrdenados = [...dados].reverse();
+      
+      dadosOrdenados.forEach(item => {
+        item.bancos.forEach(banco => {
+          if (banco.latencia === null) return;
+          
+          const desvio = ((banco.latencia - banco.baseline) / banco.baseline * 100).toFixed(1);
+          const statusClass = banco.status === 'OK' ? 'status-ok' : banco.status === 'LENTO' ? 'status-lento' : 'status-critico';
+          
+          todosRegistros.push({
+            hora: item.hora,
+            banco: banco.nome,
+            latencia: banco.latencia,
+            baseline: banco.baseline,
+            desvio: desvio,
+            status: banco.status,
+            statusClass: statusClass,
+            severidade: banco.severidade
+          });
+        });
+      });
+      
+      atualizarTabela();
+    }
+
+    function atualizarTabela() {
+      const tbody = document.getElementById('tbody-historico');
+      const btnContainer = document.getElementById('btn-ver-mais-container');
+      
+      const registrosParaMostrar = todosRegistros.slice(0, registrosVisiveis);
+      
+      let html = '';
+      
+      registrosParaMostrar.forEach(registro => {
+        html += `
+          <tr>
+            <td>${registro.hora}</td>
+            <td><strong>${registro.banco}</strong></td>
+            <td>${registro.latencia}ms</td>
+            <td>${registro.baseline}ms</td>
+            <td>${registro.desvio > 0 ? '+' : ''}${registro.desvio}%</td>
+            <td class="${registro.statusClass}">${registro.status}</td>
+            <td>${registro.severidade}%</td>
+          </tr>
+        `;
+      });
+      
+      tbody.innerHTML = html;
+      
+      if (registrosVisiveis < todosRegistros.length) {
+        btnContainer.style.display = 'block';
+      } else {
+        btnContainer.style.display = 'none';
+      }
+    }
+
+    function carregarMaisRegistros() {
+      registrosVisiveis += 10;
+      atualizarTabela();
+    }
+
+    function atualizarGraficoLatencia(dados) {
+      const ctx = document.getElementById('grafico-latencia');
+      
+      const porHora = {};
+      
+      dados.forEach(item => {
+        const hora = item.hora.substring(0, 5);
+        
+        if (!porHora[hora]) {
+          porHora[hora] = { total: 0, count: 0 };
+        }
+        
+        item.bancos.forEach(banco => {
+          if (banco.latencia) {
+            porHora[hora].total += banco.latencia;
+            porHora[hora].count++;
+          }
+        });
+      });
+      
+      const labels = Object.keys(porHora).sort();
+      const dataValues = labels.map(hora => (porHora[hora].total / porHora[hora].count).toFixed(0));
+      
+      if (graficoLatencia) graficoLatencia.destroy();
+      
+      graficoLatencia = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Latência Média (ms)',
+            data: dataValues,
+            borderColor: '#4ade80',
+            backgroundColor: 'rgba(74, 222, 128, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { 
+              beginAtZero: true,
+              grid: { color: '#2a2a2a' },
+              ticks: { color: '#888' }
+            },
+            x: {
+              grid: { color: '#2a2a2a' },
+              ticks: { color: '#888' }
             }
           }
+        }
+      });
+    }
+
+    function atualizarGraficoOscilacoesFiltrado(dados) {
+      const ctx = document.getElementById('grafico-oscilacoes');
+      
+      const porHora = {};
+      
+      dados.forEach(item => {
+        const hora = item.hora.substring(0, 5);
+        
+        if (!porHora[hora]) {
+          porHora[hora] = { totalDesvio: 0, bancosAfetados: 0, totalBancos: 0 };
+        }
+        
+        item.bancos.forEach(banco => {
+          porHora[hora].totalBancos++;
+          
+          if (banco.latencia && banco.baseline && typeof banco.latencia === 'number') {
+            const desvio = Math.abs(banco.latencia - banco.baseline);
+            
+            if (desvio > 200) {
+              porHora[hora].totalDesvio += desvio;
+              porHora[hora].bancosAfetados++;
+            }
+          }
+        });
+      });
+      
+      const labels = Object.keys(porHora).sort();
+      const dataValues = labels.map(hora => {
+        if (porHora[hora].bancosAfetados === 0) return 0;
+        return (porHora[hora].totalDesvio / porHora[hora].bancosAfetados).toFixed(0);
+      });
+      
+      if (graficoOscilacoes) graficoOscilacoes.destroy();
+      
+      graficoOscilacoes = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Desvio Médio (ms)',
+            data: dataValues,
+            backgroundColor: 'rgba(245, 87, 108, 0.6)',
+            borderColor: '#f5576c',
+            borderWidth: 2
+          }]
         },
-        x: {
-          grid: {
-            color: '#2a2a2a'
-          },
-          ticks: {
-            color: '#888'
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#2a2a2a' },
+              ticks: {
+                color: '#888',
+                callback: function(value) { return value + 'ms'; }
+              }
+            },
+            x: {
+              grid: { color: '#2a2a2a' },
+              ticks: { color: '#888' }
+            }
           }
         }
-      }
+      });
     }
-  });
-}
 
+    function aplicarFiltros() {
+      const banco = document.getElementById('filtro-banco').value;
+      const inicio = document.getElementById('filtro-inicio').value;
+      const fim = document.getElementById('filtro-fim').value;
+      
+      let params = '?';
+      if (banco) params += `banco=${banco}&`;
+      if (inicio) params += `inicio=${inicio}&`;
+      if (fim) params += `fim=${fim}&`;
+      
+      carregarHistorico(params);
+    }
 
-function aplicarFiltros() {
-  const banco = document.getElementById('filtro-banco').value;
-  const inicio = document.getElementById('filtro-inicio').value;
-  const fim = document.getElementById('filtro-fim').value;
-  
-  let params = '?';
-  if (banco) params += `banco=${banco}&`;
-  if (inicio) params += `inicio=${inicio}&`;
-  if (fim) params += `fim=${fim}&`;
-  
-  carregarHistorico(params);
-}
+    // ── EXPORTAR CSV ──
+    function exportarCSV() {
+      const btn = document.getElementById('btn-exportar');
+      const feedback = document.getElementById('export-feedback');
 
-carregarBancos();
-carregarOscilacoes();
-carregarHistorico();
+      btn.classList.add('loading');
+      btn.textContent = '⏳ Gerando CSV...';
 
-setInterval(() => {
-  carregarOscilacoes();
-  if (!document.getElementById('filtro-banco').value && 
-      !document.getElementById('filtro-inicio').value && 
-      !document.getElementById('filtro-fim').value) {
+      // cria link invisível e dispara download
+      const link = document.createElement('a');
+      link.href = '/api/historico/exportar';
+      link.download = '';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // feedback visual por 3 segundos
+      setTimeout(() => {
+        btn.classList.remove('loading');
+        btn.innerHTML = '📥 Exportar dia em CSV';
+        feedback.style.display = 'inline';
+        setTimeout(() => { feedback.style.display = 'none'; }, 3000);
+      }, 1500);
+    }
+
+    // ── INICIALIZAÇÃO ──
+    carregarBancos();
+    carregarOscilacoes();
     carregarHistorico();
-  }
-}, 60000);
 
+    setInterval(() => {
+      carregarOscilacoes();
+      if (!document.getElementById('filtro-banco').value && 
+          !document.getElementById('filtro-inicio').value && 
+          !document.getElementById('filtro-fim').value) {
+        carregarHistorico();
+      }
+    }, 60000);
   </script>
 </body>
 </html>
