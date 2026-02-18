@@ -336,10 +336,10 @@
       <div class="acoes-filtro" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
         <button class="btn" onclick="aplicarFiltros()">Aplicar Filtros</button>
         <button class="btn-exportar" id="btn-exportar" onclick="exportarCSV()">
-          📥 Exportar dia em CSV
+          Exportar em CSV
         </button>
         <span id="export-feedback" style="font-size: 13px; color: #4ade80; display: none;">
-          ✅ Download iniciado!
+          Download iniciado!
         </span>
       </div>
     </div>
@@ -698,7 +698,7 @@
       // feedback visual por 3 segundos
       setTimeout(() => {
         btn.classList.remove('loading');
-        btn.innerHTML = '📥 Exportar dia em CSV';
+        btn.innerHTML = 'Exportar em CSV';
         feedback.style.display = 'inline';
         setTimeout(() => { feedback.style.display = 'none'; }, 3000);
       }, 1500);
