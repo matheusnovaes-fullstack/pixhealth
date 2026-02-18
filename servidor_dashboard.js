@@ -651,6 +651,10 @@ async function monitorarBancos() {
   } catch (e) {}
 }
 
+// ─────────────────────────────────────────────
+// ROTAS API
+// ─────────────────────────────────────────────
+
 app.get('/api/status', (req, res) => {
   res.json(ultimosResultados);
 });
@@ -783,6 +787,68 @@ app.get('/api/oscilacoes', (req, res) => {
   });
 });
 
+// ─────────────────────────────────────────────
+// NOVA ROTA: EXPORTAR DIA EM CSV
+// ─────────────────────────────────────────────
+
+app.get('/api/historico/exportar', (req, res) => {
+  if (!historicoDia.length) {
+    return res.status(404).send('Nenhum dado disponível para exportar.');
+  }
+
+  const dataHoje = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
+
+  const cabecalho = [
+    'data',
+    'hora',
+    'banco_id',
+    'banco_nome',
+    'status',
+    'latencia_ms',
+    'baseline_ms',
+    'severidade_pct',
+    'timeout_rate',
+    'fonte'
+  ].join(';');
+
+  const linhas = [];
+
+  historicoDia.forEach(item => {
+    const data = new Date(item.timestamp).toLocaleDateString('pt-BR');
+    const hora = item.hora || new Date(item.timestamp).toLocaleTimeString('pt-BR');
+
+    item.bancos.forEach(banco => {
+      const linha = [
+        data,
+        hora,
+        banco.id || '',
+        banco.nome || '',
+        banco.status || '',
+        banco.latencia != null ? banco.latencia : '',
+        banco.baseline != null ? banco.baseline : '',
+        banco.severidade != null ? banco.severidade : '',
+        banco.timeout_rate != null ? banco.timeout_rate : '',
+        `"${(banco.fonte || '').replace(/"/g, '""')}"`
+      ].join(';');
+
+      linhas.push(linha);
+    });
+  });
+
+  const csv = '\uFEFF' + cabecalho + '\n' + linhas.join('\n');
+  // \uFEFF = BOM UTF-8 → garante que acentos abrem certo no Excel
+
+  const nomeArquivo = `relatorio_bancos_${dataHoje}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+  res.send(csv);
+});
+
+// ─────────────────────────────────────────────
+// KEEP-ALIVE + INICIALIZAÇÃO
+// ─────────────────────────────────────────────
+
 function iniciarKeepAlive() {
   setInterval(async () => {
     try {
@@ -821,6 +887,7 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('  Histórico do dia com filtros');
   console.log('  Análise de oscilações');
   console.log('  Timeout rate tracking');
+  console.log('  Exportação CSV do dia');
   console.log('\nThresholds:');
   console.log(`  OK: < ${LATENCIA_LENTA}ms`);
   console.log(`  LENTO: ${LATENCIA_LENTA}-${LATENCIA_CRITICA}ms`);
@@ -832,11 +899,12 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('  3. Downdetector (70% confiança)');
   console.log('  4. Protegido/Bloqueado (10% confiança)');
   console.log('\nAPIs Disponíveis:');
-  console.log('  GET /api/status - Status atual');
-  console.log('  GET /api/health - Health check');
-  console.log('  GET /api/metrics - Métricas simplificadas');
-  console.log('  GET /api/historico - Histórico do dia');
-  console.log('  GET /api/oscilacoes - Análise de oscilações');
+  console.log('  GET /api/status          - Status atual');
+  console.log('  GET /api/health          - Health check');
+  console.log('  GET /api/metrics         - Métricas simplificadas');
+  console.log('  GET /api/historico       - Histórico do dia');
+  console.log('  GET /api/oscilacoes      - Análise de oscilações');
+  console.log('  GET /api/historico/exportar - Exportar dia em CSV');
   console.log('='.repeat(80) + '\n');
   
   iniciarKeepAlive();
