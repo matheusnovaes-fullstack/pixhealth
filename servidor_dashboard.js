@@ -106,79 +106,8 @@ const BANCOS_MONITORADOS = [
     nome: 'Safra', 
     urls: ['https://www.safra.com.br'],
     baselineInicial: 700
-  },
-
-  // -------------------------------
-  // OKTO StatusPage (NOVOS CARDS)
-  // -------------------------------
-  { 
-    id: 'okto-all', 
-    nome: 'OKTO Payments (Todos)', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-bb', 
-    nome: 'OKTO - Banco do Brasil', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-itau', 
-    nome: 'OKTO - Itau', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-nubank', 
-    nome: 'OKTO - Nubank', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-santander', 
-    nome: 'OKTO - Santander', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-caixa', 
-    nome: 'OKTO - Caixa Economica', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-picpay', 
-    nome: 'OKTO - PicPay', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-bradesco', 
-    nome: 'OKTO - Bradesco', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-c6', 
-    nome: 'OKTO - C6 Bank', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-pan', 
-    nome: 'OKTO - Banco Pan', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
-  },
-  { 
-    id: 'okto-inter', 
-    nome: 'OKTO - Inter', 
-    statusAPI: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    baselineInicial: 300
   }
 ];
-
 
 let ultimosResultados = [];
 let clientesConectados = [];
@@ -262,35 +191,17 @@ async function verificarStatusAPI(url) {
       }
     });
     
-    // StatusPage padrão (Nubank, Itaú, etc.)
-    if (response.data.status && response.data.status.indicator) {
+    if (response.data && response.data.status) {
       return {
         online: response.data.status.indicator === 'none',
         indicator: response.data.status.indicator,
         description: response.data.status.description || 'Operacional'
       };
     }
-    
-    // StatusPage OKTO (components array)
-    if (response.data.components) {
-      const todosOK = response.data.components.every(function(c) {
-        return c.status === 'operational';
-      });
-      return {
-        online: todosOK,
-        indicator: todosOK ? 'none' : 'major',
-        description: todosOK ? 'Todos operacionais' : 'Alguns com problema'
-      };
-    }
-    
-    return null;
   } catch (erro) {
     return null;
   }
 }
-
-
-
 
 async function verificarDowndetector(url) {
   try {
