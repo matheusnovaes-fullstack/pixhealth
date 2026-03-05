@@ -273,8 +273,10 @@ async function verificarStatusAPI(url) {
     
     // StatusPage OKTO (components array)
     if (response.data && response.data.components) {
-      // Para OKTO-All: todos operacionais?
-      const todosOK = response.data.components.every((c: any) => c.status === 'operational');
+      // Para OKTO: todos components operacionais?
+      const todosOK = response.data.components.every(function(c) {
+        return c.status === 'operational';
+      });
       return {
         online: todosOK,
         indicator: todosOK ? 'none' : 'major',
@@ -287,6 +289,7 @@ async function verificarStatusAPI(url) {
     return null;
   }
 }
+
 
 
 async function verificarDowndetector(url) {
