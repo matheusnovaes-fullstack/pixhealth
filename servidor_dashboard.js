@@ -262,17 +262,32 @@ async function verificarStatusAPI(url) {
       }
     });
     
-    if (response.data && response.data.status) {
+    // StatusPage padrão (Nubank, Itaú, etc.)
+    if (response.data && response.data.status && response.data.status.indicator) {
       return {
         online: response.data.status.indicator === 'none',
         indicator: response.data.status.indicator,
         description: response.data.status.description || 'Operacional'
       };
     }
+    
+    // StatusPage OKTO (components array)
+    if (response.data && response.data.components) {
+      // Para OKTO-All: todos operacionais?
+      const todosOK = response.data.components.every((c: any) => c.status === 'operational');
+      return {
+        online: todosOK,
+        indicator: todosOK ? 'none' : 'major',
+        description: todosOK ? 'Todos operacionais' : 'Alguns componentes com problema'
+      };
+    }
+    
+    return null;
   } catch (erro) {
     return null;
   }
 }
+
 
 async function verificarDowndetector(url) {
   try {
