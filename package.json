@@ -7,7 +7,7 @@
     "start": "node servidor_dashboard.js",
     "statuspage": "node servidor_dashboard_statuspage.js",
     "dev": "nodemon servidor_dashboard.js"
-  }
+  },
   "dependencies": {
     "express": "^4.18.2",
     "axios": "^1.6.2",
