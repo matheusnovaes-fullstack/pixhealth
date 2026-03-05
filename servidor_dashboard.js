@@ -263,7 +263,7 @@ async function verificarStatusAPI(url) {
     });
     
     // StatusPage padrão (Nubank, Itaú, etc.)
-    if (response.data && response.data.status && response.data.status.indicator) {
+    if (response.data.status && response.data.status.indicator) {
       return {
         online: response.data.status.indicator === 'none',
         indicator: response.data.status.indicator,
@@ -272,15 +272,14 @@ async function verificarStatusAPI(url) {
     }
     
     // StatusPage OKTO (components array)
-    if (response.data && response.data.components) {
-      // Para OKTO: todos components operacionais?
+    if (response.data.components) {
       const todosOK = response.data.components.every(function(c) {
         return c.status === 'operational';
       });
       return {
         online: todosOK,
         indicator: todosOK ? 'none' : 'major',
-        description: todosOK ? 'Todos operacionais' : 'Alguns componentes com problema'
+        description: todosOK ? 'Todos operacionais' : 'Alguns com problema'
       };
     }
     
@@ -289,6 +288,7 @@ async function verificarStatusAPI(url) {
     return null;
   }
 }
+
 
 
 
