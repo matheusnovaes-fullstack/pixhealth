@@ -329,7 +329,7 @@ function iniciarKeepAlive() {
 
 server.listen(PORTA, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(60));
-  console.log('Okto Payments Status Monitor');
+  console.log('Pix Health Monitor');
   console.log('='.repeat(60));
   console.log(`Servidor:   http://0.0.0.0:${PORTA}`);
   console.log(`StatusPage: ${STATUSPAGE_URL}`);
