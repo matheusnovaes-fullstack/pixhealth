@@ -73,9 +73,9 @@ function mapearStatus(statusOriginal) {
 
 function labelStatus(status) {
   switch (status) {
-    case 'UP':       return 'Operacional';
-    case 'DEGRADED': return 'Degradado';
-    case 'DOWN':     return 'Fora';
+    case 'UP':       return 'OPERACIONAL';
+    case 'DEGRADED': return 'DEGRADAÇÃO';
+    case 'DOWN':     return 'DOWN';
     default:         return status;
   }
 }
