@@ -18,7 +18,7 @@ const SELF_PING_INTERVAL = 14 * 60 * 1000;
 const STATUSPAGE_URL = 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json';
 
 // Componentes ignorados no monitor
-const IGNORADOS = ['RTM', 'JD', 'API Deposits', 'API Withdrawals'];
+const IGNORADOS = ['RTM', 'JD'];
 
 // ─────────────────────────────────────────────
 // ESTADO GLOBAL
