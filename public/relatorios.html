@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relatórios – Okto Status Monitor</title>
+  <title>Relatórios – Pix Health Monitor</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -21,138 +22,164 @@
     /* ── VOLTAR ── */
     .voltar {
       display: inline-flex; align-items: center; gap: 6px;
-      margin-bottom: 20px; padding: 9px 18px;
-      background: #141414; color: #888;
-      text-decoration: none; border-radius: 10px;
-      border: 1px solid #222; font-size: 13px; font-weight: 600;
+      margin-bottom: 20px; padding: 9px 16px;
+      background: #141414; color: #666;
+      text-decoration: none; border-radius: 8px;
+      border: 1px solid #1e1e1e; font-size: 13px; font-weight: 600;
       transition: all 0.2s;
     }
+    .voltar svg { width: 14px; height: 14px; }
     .voltar:hover { background: #1e1e1e; color: #4ade80; border-color: #2d5f3f; }
 
     /* ── HEADER ── */
     .header {
-      background: #141414; padding: 28px 32px;
-      border-radius: 14px; margin-bottom: 20px;
+      background: #141414; padding: 26px 30px;
+      border-radius: 14px; margin-bottom: 18px;
       border: 1px solid #1e1e1e;
       display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
     }
-    .header h1 { font-size: 24px; font-weight: 700; }
-    .header p  { color: #666; font-size: 13px; margin-top: 4px; }
-    .ultima-att { font-size: 12px; color: #555; }
-    .ultima-att strong { color: #888; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p  { color: #555; font-size: 13px; margin-top: 4px; }
+    .ultima-att { font-size: 12px; color: #444; display: flex; align-items: center; gap: 6px; }
+    .ultima-att svg { width: 13px; height: 13px; }
+    .ultima-att strong { color: #777; }
 
-    /* ── CARDS RESUMO ── */
+    /* ── RESUMO ── */
     .resumo-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px; margin-bottom: 20px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 18px;
     }
     .resumo-card {
       background: #141414; border: 1px solid #1e1e1e;
-      border-radius: 12px; padding: 20px;
+      border-radius: 12px; padding: 18px;
       display: flex; flex-direction: column; gap: 8px;
     }
-    .resumo-card .rc-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
-    .resumo-card .rc-val   { font-size: 32px; font-weight: 700; line-height: 1; }
-    .resumo-card .rc-sub   { font-size: 12px; color: #555; }
+    .rc-label-wrap { display: flex; align-items: center; gap: 6px; }
+    .rc-label-wrap svg { width: 13px; height: 13px; }
+    .rc-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .rc-val   { font-size: 30px; font-weight: 700; line-height: 1; }
+    .rc-sub   { font-size: 11px; color: #444; }
     .resumo-card.up       { border-color: #1f4730; }
+    .resumo-card.up .rc-label-wrap svg,
     .resumo-card.up .rc-val       { color: #4ade80; }
     .resumo-card.degraded { border-color: #4a3800; }
+    .resumo-card.degraded .rc-label-wrap svg,
     .resumo-card.degraded .rc-val { color: #fbbf24; }
     .resumo-card.down     { border-color: #4a1515; }
+    .resumo-card.down .rc-label-wrap svg,
     .resumo-card.down .rc-val     { color: #ef4444; }
+    .resumo-card.neutro .rc-label-wrap svg { color: #555; }
     .resumo-card.neutro .rc-val   { color: #888; }
 
-    /* ── DESTAQUE CRÍTICO ── */
+    /* ── DESTAQUE ── */
     .destaque {
       background: #141414; border: 1px solid #4a1515;
-      padding: 24px 28px; border-radius: 14px; margin-bottom: 20px;
+      padding: 22px 28px; border-radius: 14px; margin-bottom: 18px;
     }
-    .destaque h2 {
-      font-size: 13px; color: #ef4444; font-weight: 700;
+    .destaque-titulo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: #ef4444; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 16px;
     }
+    .destaque-titulo svg { width: 14px; height: 14px; }
     .destaque-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
     }
     .destaque-item {
       background: #0f0f0f; padding: 14px 16px; border-radius: 10px;
       border-left: 3px solid #ef4444;
     }
-    .destaque-item label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
-    .destaque-item value { font-size: 22px; font-weight: 700; color: #fff; display: block; }
+    .destaque-item label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+    .destaque-item value { font-size: 20px; font-weight: 700; color: #fff; display: block; }
 
     /* ── FILTROS ── */
     .filtros {
-      background: #141414; padding: 24px 28px;
-      border-radius: 14px; margin-bottom: 20px; border: 1px solid #1e1e1e;
+      background: #141414; padding: 22px 28px;
+      border-radius: 14px; margin-bottom: 18px; border: 1px solid #1e1e1e;
     }
-    .filtros h3 { font-size: 14px; font-weight: 600; color: #aaa; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .filtros-titulo {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 700; color: #555;
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 16px;
+    }
+    .filtros-titulo svg { width: 13px; height: 13px; }
     .filtros-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px; margin-bottom: 16px;
+      gap: 14px; margin-bottom: 14px;
     }
     .filtros label { display: block; font-size: 11px; color: #555; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .filtros select, .filtros input {
-      width: 100%; padding: 11px 14px;
-      background: #0f0f0f; border: 1px solid #222;
+      width: 100%; padding: 10px 12px;
+      background: #0f0f0f; border: 1px solid #1e1e1e;
       border-radius: 8px; font-size: 13px; color: #fff;
       transition: border-color 0.2s;
     }
     .filtros select:focus, .filtros input:focus { outline: none; border-color: #4ade80; }
 
     .acoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-
     .btn {
-      padding: 11px 24px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600;
       cursor: pointer; border: none; transition: all 0.2s;
     }
-    .btn-aplicar { background: #1a4d2e; color: #4ade80; border: 1px solid #2d5f3f; }
-    .btn-aplicar:hover { background: #2d5f3f; }
-    .btn-exportar { background: #1a2a4a; color: #60a5fa; border: 1px solid #2d3f6a; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn svg { width: 14px; height: 14px; }
+    .btn-aplicar  { background: #1a4d2e; color: #4ade80; border: 1px solid #2d5f3f; }
+    .btn-aplicar:hover  { background: #2d5f3f; }
+    .btn-exportar { background: #1a2a4a; color: #60a5fa; border: 1px solid #2d3f6a; }
     .btn-exportar:hover { background: #2d3f6a; }
     #export-feedback { font-size: 12px; color: #4ade80; display: none; }
 
     /* ── GRÁFICOS ── */
     .graficos {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
-      gap: 16px; margin-bottom: 20px;
+      gap: 16px; margin-bottom: 18px;
     }
     .grafico-card {
-      background: #141414; padding: 24px;
+      background: #141414; padding: 22px;
       border-radius: 14px; border: 1px solid #1e1e1e;
     }
-    .grafico-card h3 { font-size: 14px; font-weight: 600; color: #aaa; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .grafico-titulo {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 700; color: #555;
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 18px;
+    }
+    .grafico-titulo svg { width: 13px; height: 13px; }
 
     /* ── TABELA ── */
     .tabela-wrap {
-      background: #141414; padding: 24px 28px;
+      background: #141414; padding: 22px 28px;
       border-radius: 14px; border: 1px solid #1e1e1e; overflow-x: auto;
     }
-    .tabela-wrap h3 { font-size: 14px; font-weight: 600; color: #aaa; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tabela-titulo {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 700; color: #555;
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 18px;
+    }
+    .tabela-titulo svg { width: 13px; height: 13px; }
 
     table { width: 100%; border-collapse: collapse; }
     th {
-      background: #0f0f0f; padding: 12px 16px; text-align: left;
-      font-size: 11px; font-weight: 600; color: #555;
+      background: #0f0f0f; padding: 11px 14px; text-align: left;
+      font-size: 11px; font-weight: 600; color: #444;
       text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid #1e1e1e;
+      border-bottom: 1px solid #1a1a1a;
     }
-    td { padding: 13px 16px; border-bottom: 1px solid #161616; font-size: 13px; color: #ccc; }
+    td { padding: 12px 14px; border-bottom: 1px solid #141414; font-size: 13px; color: #bbb; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #0f0f0f; }
 
     .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 5px;
-      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 5px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
     }
+    .badge svg { width: 10px; height: 10px; }
     .badge-up       { background: #0d2b1a; color: #4ade80; }
-    .badge-degraded { background: #2b2000; color: #fbbf24; }
-    .badge-down     { background: #2b0a0a; color: #ef4444; }
+    .badge-degraded { background: #1f1600; color: #fbbf24; }
+    .badge-down     { background: #1f0808; color: #ef4444; }
 
-    .loading { text-align: center; padding: 40px; color: #555; font-size: 14px; }
-
-    .btn-ver-mais-wrap { text-align: center; margin-top: 16px; }
+    .loading { text-align: center; padding: 40px; color: #444; font-size: 13px; }
+    .btn-ver-mais-wrap { text-align: center; margin-top: 14px; }
 
     @media (max-width: 768px) {
       .graficos { grid-template-columns: 1fr; }
@@ -164,27 +191,50 @@
 <body>
 <div class="container">
 
-  <a href="/" class="voltar">← Voltar ao Dashboard</a>
+  <a href="/" class="voltar">
+    <i data-lucide="arrow-left"></i> Voltar ao Dashboard
+  </a>
 
   <div class="header">
     <div>
-      <h1>Relatórios – Okto Status Monitor</h1>
+      <h1>Relatórios – Pix Health Monitor</h1>
       <p>Histórico de disponibilidade dos componentes ao longo do dia</p>
     </div>
-    <div class="ultima-att">Atualizado em <strong id="ultimaAtt">--:--:--</strong></div>
+    <div class="ultima-att">
+      <i data-lucide="refresh-cw"></i>
+      Atualizado em <strong id="ultimaAtt">--:--:--</strong>
+    </div>
   </div>
 
-  <!-- Resumo numérico -->
-  <div class="resumo-grid" id="resumoGrid">
-    <div class="resumo-card neutro"><div class="rc-label">Verificações</div><div class="rc-val" id="r-total">—</div><div class="rc-sub">no dia</div></div>
-    <div class="resumo-card up"><div class="rc-label">Snapshots UP</div><div class="rc-val" id="r-up">—</div><div class="rc-sub">registros operacionais</div></div>
-    <div class="resumo-card degraded"><div class="rc-label">Snapshots Degraded</div><div class="rc-val" id="r-degraded">—</div><div class="rc-sub">registros com degradação</div></div>
-    <div class="resumo-card down"><div class="rc-label">Snapshots Down</div><div class="rc-val" id="r-down">—</div><div class="rc-sub">registros fora do ar</div></div>
+  <!-- Resumo -->
+  <div class="resumo-grid">
+    <div class="resumo-card neutro">
+      <div class="rc-label-wrap"><i data-lucide="layers"></i><span class="rc-label">Verificações</span></div>
+      <div class="rc-val" id="r-total">—</div>
+      <div class="rc-sub">no dia</div>
+    </div>
+    <div class="resumo-card up">
+      <div class="rc-label-wrap"><i data-lucide="check-circle"></i><span class="rc-label">Operacional</span></div>
+      <div class="rc-val" id="r-up">—</div>
+      <div class="rc-sub">snapshots UP</div>
+    </div>
+    <div class="resumo-card degraded">
+      <div class="rc-label-wrap"><i data-lucide="alert-triangle"></i><span class="rc-label">Degradação</span></div>
+      <div class="rc-val" id="r-degraded">—</div>
+      <div class="rc-sub">snapshots DEGRADED</div>
+    </div>
+    <div class="resumo-card down">
+      <div class="rc-label-wrap"><i data-lucide="x-circle"></i><span class="rc-label">Down</span></div>
+      <div class="rc-val" id="r-down">—</div>
+      <div class="rc-sub">snapshots DOWN</div>
+    </div>
   </div>
 
-  <!-- Destaque: hora mais crítica -->
+  <!-- Destaque -->
   <div class="destaque">
-    <h2>⚠ Horário Mais Crítico do Dia</h2>
+    <div class="destaque-titulo">
+      <i data-lucide="alert-octagon"></i> Horário Mais Crítico do Dia
+    </div>
     <div class="destaque-grid" id="destaqueGrid">
       <div class="loading">Carregando análise...</div>
     </div>
@@ -192,7 +242,7 @@
 
   <!-- Filtros -->
   <div class="filtros">
-    <h3>Filtros</h3>
+    <div class="filtros-titulo"><i data-lucide="sliders"></i> Filtros</div>
     <div class="filtros-grid">
       <div>
         <label>Componente</label>
@@ -208,8 +258,12 @@
       </div>
     </div>
     <div class="acoes">
-      <button class="btn btn-aplicar" onclick="aplicarFiltros()">Aplicar Filtros</button>
-      <button class="btn btn-exportar" onclick="exportarCSV()">⬇ Exportar CSV</button>
+      <button class="btn btn-aplicar" onclick="aplicarFiltros()">
+        <i data-lucide="search"></i> Aplicar Filtros
+      </button>
+      <button class="btn btn-exportar" onclick="exportarCSV()">
+        <i data-lucide="download"></i> Exportar CSV
+      </button>
       <span id="export-feedback">Download iniciado!</span>
     </div>
   </div>
@@ -217,18 +271,18 @@
   <!-- Gráficos -->
   <div class="graficos">
     <div class="grafico-card">
-      <h3>Disponibilidade por Hora (%)</h3>
+      <div class="grafico-titulo"><i data-lucide="trending-up"></i> Disponibilidade por Hora (%)</div>
       <canvas id="grafico-disponibilidade"></canvas>
     </div>
     <div class="grafico-card">
-      <h3>Incidentes por Hora (DEGRADED + DOWN)</h3>
+      <div class="grafico-titulo"><i data-lucide="bar-chart-2"></i> Incidentes por Hora (DEGRADAÇÃO + DOWN)</div>
       <canvas id="grafico-incidentes"></canvas>
     </div>
   </div>
 
-  <!-- Tabela histórico -->
+  <!-- Tabela -->
   <div class="tabela-wrap">
-    <h3>Histórico Detalhado</h3>
+    <div class="tabela-titulo"><i data-lucide="list"></i> Histórico Detalhado</div>
     <table>
       <thead>
         <tr>
@@ -243,18 +297,27 @@
       </tbody>
     </table>
     <div class="btn-ver-mais-wrap" id="btnVerMaisWrap" style="display:none;">
-      <button class="btn btn-aplicar" onclick="verMais()">Ver Mais</button>
+      <button class="btn btn-aplicar" onclick="verMais()">
+        <i data-lucide="chevron-down"></i> Ver Mais
+      </button>
     </div>
   </div>
 
 </div>
 
 <script>
+  lucide.createIcons();
+
   let graficoDisp, graficoInc;
   let todosRegistros = [];
   let visiveis = 20;
 
-  // ── CARREGAR COMPONENTES NO SELECT ──
+  function badgeHtml(status) {
+    const icone = status === 'UP' ? 'check-circle' : status === 'DEGRADED' ? 'alert-triangle' : 'x-circle';
+    const label = status === 'UP' ? 'OPERACIONAL' : status === 'DEGRADED' ? 'DEGRADAÇÃO' : 'DOWN';
+    return `<span class="badge badge-${status.toLowerCase()}"><i data-lucide="${icone}"></i>${label}</span>`;
+  }
+
   async function carregarComponentes() {
     try {
       const res  = await fetch('/api/status');
@@ -269,34 +332,27 @@
     } catch(e) {}
   }
 
-  // ── CARREGAR HISTÓRICO ──
   async function carregarHistorico(params = '') {
     try {
       const res  = await fetch('/api/historico' + params);
       const data = await res.json();
-
       document.getElementById('ultimaAtt').textContent = new Date().toLocaleTimeString('pt-BR');
 
       const dados = data.dados || [];
-
       calcularResumo(dados);
       calcularDestaque(dados);
       renderGraficoDisponibilidade(dados);
       renderGraficoIncidentes(dados);
       renderTabela(dados);
-
-    } catch(e) {
-      console.error('Erro ao carregar histórico:', e);
-    }
+      lucide.createIcons();
+    } catch(e) { console.error(e); }
   }
 
-  // ── RESUMO ──
   function calcularResumo(dados) {
-    let total = 0, nUp = 0, nDeg = 0, nDown = 0;
+    let nUp = 0, nDeg = 0, nDown = 0;
     dados.forEach(item => {
       (item.componentes || []).forEach(c => {
-        total++;
-        if (c.status === 'UP')       nUp++;
+        if (c.status === 'UP')            nUp++;
         else if (c.status === 'DEGRADED') nDeg++;
         else if (c.status === 'DOWN')     nDown++;
       });
@@ -307,55 +363,43 @@
     document.getElementById('r-down').textContent     = nDown;
   }
 
-  // ── DESTAQUE HORA MAIS CRÍTICA ──
   function calcularDestaque(dados) {
     const el = document.getElementById('destaqueGrid');
-
     if (!dados.length) {
-      el.innerHTML = '<div class="destaque-item"><label>Status</label><value>Aguardando dados...</value></div>';
+      el.innerHTML = '<div class="destaque-item"><label>Status</label><value style="font-size:14px">Aguardando dados</value></div>';
       return;
     }
 
     const porHora = {};
     dados.forEach(item => {
       const h = (item.hora || '').substring(0, 5);
-      if (!porHora[h]) porHora[h] = { incidentes: 0, verificacoes: 0, afetados: new Set() };
-      porHora[h].verificacoes++;
+      if (!porHora[h]) porHora[h] = { incidentes: 0, afetados: new Set() };
       (item.componentes || []).forEach(c => {
-        if (c.status !== 'UP') {
-          porHora[h].incidentes++;
-          porHora[h].afetados.add(c.nome);
-        }
+        if (c.status !== 'UP') { porHora[h].incidentes++; porHora[h].afetados.add(c.nome); }
       });
     });
 
-    const horaMaisCritica = Object.entries(porHora).sort((a, b) => b[1].incidentes - a[1].incidentes)[0];
+    const [hora, info] = Object.entries(porHora).sort((a, b) => b[1].incidentes - a[1].incidentes)[0] || [];
 
-    if (!horaMaisCritica || horaMaisCritica[1].incidentes === 0) {
-      el.innerHTML = `
-        <div class="destaque-item" style="border-left-color:#4ade80">
-          <label>Status</label><value style="color:#4ade80;font-size:16px">Nenhum incidente registrado</value>
-        </div>`;
+    if (!hora || info.incidentes === 0) {
+      el.innerHTML = `<div class="destaque-item" style="border-left-color:#4ade80"><label>Status</label><value style="color:#4ade80;font-size:14px">Nenhum incidente registrado</value></div>`;
       return;
     }
 
-    const [hora, info] = horaMaisCritica;
     el.innerHTML = `
       <div class="destaque-item"><label>Horário</label><value>${hora}</value></div>
       <div class="destaque-item"><label>Incidentes</label><value>${info.incidentes}</value></div>
       <div class="destaque-item"><label>Componentes</label><value>${info.afetados.size}</value></div>
-      <div class="destaque-item" style="grid-column: span 2;">
+      <div class="destaque-item" style="grid-column:span 2">
         <label>Afetados</label>
-        <value style="font-size:14px;line-height:1.6">${[...info.afetados].join(', ') || '—'}</value>
+        <value style="font-size:13px;line-height:1.6">${[...info.afetados].join(', ')}</value>
       </div>
     `;
   }
 
-  // ── GRÁFICO DISPONIBILIDADE ──
   function renderGraficoDisponibilidade(dados) {
     const ctx = document.getElementById('grafico-disponibilidade');
     const porHora = {};
-
     dados.forEach(item => {
       const h = (item.hora || '').substring(0, 5);
       if (!porHora[h]) porHora[h] = { up: 0, total: 0 };
@@ -364,7 +408,6 @@
         if (c.status === 'UP') porHora[h].up++;
       });
     });
-
     const labels = Object.keys(porHora).sort();
     const values = labels.map(h => porHora[h].total > 0 ? ((porHora[h].up / porHora[h].total) * 100).toFixed(1) : 100);
 
@@ -377,7 +420,7 @@
           label: 'Disponibilidade (%)',
           data: values,
           borderColor: '#4ade80',
-          backgroundColor: 'rgba(74,222,128,0.08)',
+          backgroundColor: 'rgba(74,222,128,0.07)',
           tension: 0.4, fill: true, pointRadius: 3
         }]
       },
@@ -385,18 +428,16 @@
         responsive: true,
         plugins: { legend: { display: false } },
         scales: {
-          y: { min: 0, max: 100, grid: { color: '#1e1e1e' }, ticks: { color: '#555', callback: v => v + '%' } },
-          x: { grid: { color: '#1e1e1e' }, ticks: { color: '#555' } }
+          y: { min: 0, max: 100, grid: { color: '#1a1a1a' }, ticks: { color: '#444', callback: v => v + '%' } },
+          x: { grid: { color: '#1a1a1a' }, ticks: { color: '#444' } }
         }
       }
     });
   }
 
-  // ── GRÁFICO INCIDENTES ──
   function renderGraficoIncidentes(dados) {
     const ctx = document.getElementById('grafico-incidentes');
     const porHora = {};
-
     dados.forEach(item => {
       const h = (item.hora || '').substring(0, 5);
       if (!porHora[h]) porHora[h] = { degraded: 0, down: 0 };
@@ -405,7 +446,6 @@
         if (c.status === 'DOWN')     porHora[h].down++;
       });
     });
-
     const labels = Object.keys(porHora).sort();
 
     if (graficoInc) graficoInc.destroy();
@@ -414,32 +454,21 @@
       data: {
         labels,
         datasets: [
-          {
-            label: 'DEGRADED',
-            data: labels.map(h => porHora[h].degraded),
-            backgroundColor: 'rgba(251,191,36,0.7)',
-            borderColor: '#fbbf24', borderWidth: 1
-          },
-          {
-            label: 'DOWN',
-            data: labels.map(h => porHora[h].down),
-            backgroundColor: 'rgba(239,68,68,0.7)',
-            borderColor: '#ef4444', borderWidth: 1
-          }
+          { label: 'DEGRADAÇÃO', data: labels.map(h => porHora[h].degraded), backgroundColor: 'rgba(251,191,36,0.65)', borderColor: '#fbbf24', borderWidth: 1 },
+          { label: 'DOWN',       data: labels.map(h => porHora[h].down),     backgroundColor: 'rgba(239,68,68,0.65)',   borderColor: '#ef4444', borderWidth: 1 }
         ]
       },
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: '#888', font: { size: 12 } } } },
+        plugins: { legend: { labels: { color: '#666', font: { size: 11 } } } },
         scales: {
-          y: { beginAtZero: true, stacked: true, grid: { color: '#1e1e1e' }, ticks: { color: '#555' } },
-          x: { stacked: true, grid: { color: '#1e1e1e' }, ticks: { color: '#555' } }
+          y: { beginAtZero: true, stacked: true, grid: { color: '#1a1a1a' }, ticks: { color: '#444' } },
+          x: { stacked: true, grid: { color: '#1a1a1a' }, ticks: { color: '#444' } }
         }
       }
     });
   }
 
-  // ── TABELA ──
   function renderTabela(dados) {
     todosRegistros = [];
     [...dados].reverse().forEach(item => {
@@ -464,18 +493,20 @@
     tbody.innerHTML = fatia.map(r => `
       <tr>
         <td>${r.hora}</td>
-        <td><strong>${r.nome}</strong></td>
-        <td><span class="badge badge-${r.status.toLowerCase()}">${r.status}</span></td>
-        <td style="color:#555">${r.original}</td>
+        <td><strong style="color:#fff">${r.nome}</strong></td>
+        <td>${badgeHtml(r.status)}</td>
+        <td style="color:#444">${r.original}</td>
       </tr>
     `).join('');
 
-    document.getElementById('btnVerMaisWrap').style.display = visiveis < todosRegistros.length ? 'block' : 'none';
+    document.getElementById('btnVerMaisWrap').style.display =
+      visiveis < todosRegistros.length ? 'block' : 'none';
+
+    lucide.createIcons();
   }
 
   function verMais() { visiveis += 20; atualizarTabela(); }
 
-  // ── FILTROS ──
   function aplicarFiltros() {
     const comp   = document.getElementById('filtro-componente').value;
     const inicio = document.getElementById('filtro-inicio').value;
@@ -487,7 +518,6 @@
     carregarHistorico(params);
   }
 
-  // ── EXPORTAR CSV ──
   function exportarCSV() {
     const link = document.createElement('a');
     link.href = '/api/historico/exportar';
@@ -500,9 +530,9 @@
     setTimeout(() => { fb.style.display = 'none'; }, 3000);
   }
 
-  // ── INIT ──
   carregarComponentes();
   carregarHistorico();
+
   setInterval(() => {
     const comp   = document.getElementById('filtro-componente').value;
     const inicio = document.getElementById('filtro-inicio').value;
