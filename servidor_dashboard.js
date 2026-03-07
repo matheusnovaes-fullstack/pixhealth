@@ -21,7 +21,7 @@ const STATUSPAGE_URL = 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.
 // ESTADO GLOBAL
 // ─────────────────────────────────────────────
 
-let ultimosResultados = { timestamp: null, componentes: [], resumo: {} };
+let ultimosResultados = { timestamp: null, componentes: [], incidentes: [], resumo: {} };
 let clientesConectados = [];
 let historicoDia = [];
 
@@ -53,7 +53,7 @@ wss.on('connection', (ws) => {
 });
 
 // ─────────────────────────────────────────────
-// MAPEAMENTO DE STATUS OKTO → UP / DEGRADED / DOWN
+// MAPEAMENTO DE STATUS
 // ─────────────────────────────────────────────
 
 function mapearStatus(statusOriginal) {
@@ -80,6 +80,40 @@ function labelStatus(status) {
   }
 }
 
+// Agrupa componentes filhos sob seu grupo pai
+// Estrutura da Okto:
+//   group: true  → componente é um grupo pai (ex: "Brazilian Banks") — NÃO exibir como card
+//   group: false → componente real (API, banco, etc.) — EXIBIR
+function separarComponentes(rawComponents) {
+  // Mapa de id → nome do grupo pai
+  const grupos = {};
+  rawComponents
+    .filter(c => c.group === true)
+    .forEach(g => { grupos[g.id] = g.name; });
+
+  // Apenas componentes reais (não grupos)
+  return rawComponents
+    .filter(c => c.group === false)
+    .map(c => {
+      const status = mapearStatus(c.status);
+      return {
+        id:              c.id,
+        nome:            c.name,
+        grupo:           c.group_id ? (grupos[c.group_id] || null) : null,
+        status,
+        status_original: c.status,
+        label:           labelStatus(status),
+        descricao:       c.description || null,
+        atualizado_em:   c.updated_at  || new Date().toISOString(),
+      };
+    })
+    .sort((a, b) => {
+      // Ordena: DOWN primeiro, DEGRADED segundo, UP por último
+      const ordem = { DOWN: 0, DEGRADED: 1, UP: 2 };
+      return (ordem[a.status] ?? 99) - (ordem[b.status] ?? 99);
+    });
+}
+
 // ─────────────────────────────────────────────
 // CONSULTAR STATUSPAGE
 // ─────────────────────────────────────────────
@@ -91,43 +125,48 @@ async function consultarStatusPage() {
     const latencia = Date.now() - inicio;
     const data     = response.data;
 
-    // Filtra apenas componentes raiz (sem parent_id) para evitar duplicatas
-    const componentes = (data.components || [])
-      .filter(c => !c.group || c.showcase)
-      .map(c => {
-        const status = mapearStatus(c.status);
-        return {
-          id:              c.id,
-          nome:            c.name,
-          status,
-          status_original: c.status,
-          label:           labelStatus(status),
-          descricao:       c.description || null,
-          atualizado_em:   c.updated_at  || new Date().toISOString(),
-          latencia_api_ms: latencia
-        };
-      });
+    const componentes = separarComponentes(data.components || []);
+    const geral       = data.status || {};
 
-    // Status geral da página
-    const geral = data.status || {};
+    // Incidentes ativos
+    const incidentes = (data.incidents || []).map(i => ({
+      id:         i.id,
+      nome:       i.name,
+      status:     i.status,
+      impacto:    i.impact,
+      atualizado: i.updated_at,
+      url:        i.shortlink || null
+    }));
 
-    return { componentes, geral, latencia };
+    // Manutenções agendadas
+    const manutencoes = (data.scheduled_maintenances || []).map(m => ({
+      id:          m.id,
+      nome:        m.name,
+      status:      m.status,
+      inicio:      m.scheduled_for,
+      fim:         m.scheduled_until,
+      atualizado:  m.updated_at
+    }));
+
+    return { componentes, geral, latencia, incidentes, manutencoes };
 
   } catch (erro) {
     console.error('[StatusPage] Erro ao consultar:', erro.message);
     return {
       componentes: [{
-        id:   'statuspage',
-        nome: 'StatusPage API',
-        status: 'DOWN',
+        id:              'statuspage-erro',
+        nome:            'StatusPage API',
+        grupo:           null,
+        status:          'DOWN',
         status_original: 'erro',
-        label: 'Fora',
-        descricao: erro.message,
-        atualizado_em: new Date().toISOString(),
-        latencia_api_ms: null
+        label:           'DOWN',
+        descricao:       erro.message,
+        atualizado_em:   new Date().toISOString(),
       }],
-      geral: { indicator: 'critical', description: erro.message },
-      latencia: null
+      geral:       { indicator: 'critical', description: erro.message },
+      latencia:    null,
+      incidentes:  [],
+      manutencoes: []
     };
   }
 }
@@ -137,18 +176,20 @@ async function consultarStatusPage() {
 // ─────────────────────────────────────────────
 
 async function monitorar() {
-  console.log(`[Monitor] Consultando StatusPage Okto...`);
+  console.log('[Monitor] Consultando StatusPage Okto...');
 
-  const { componentes, geral, latencia } = await consultarStatusPage();
+  const { componentes, geral, latencia, incidentes, manutencoes } = await consultarStatusPage();
 
   const nUp       = componentes.filter(c => c.status === 'UP').length;
   const nDegraded = componentes.filter(c => c.status === 'DEGRADED').length;
   const nDown     = componentes.filter(c => c.status === 'DOWN').length;
 
   ultimosResultados = {
-    timestamp:  new Date().toISOString(),
+    timestamp:       new Date().toISOString(),
     componentes,
     geral,
+    incidentes,
+    manutencoes,
     latencia_api_ms: latencia,
     resumo: {
       total:    componentes.length,
@@ -158,14 +199,15 @@ async function monitorar() {
     }
   };
 
-  // Histórico do dia
+  // Histórico do dia — salva snapshot leve
   historicoDia.push({
-    timestamp:  new Date().toISOString(),
-    hora:       new Date().toLocaleTimeString('pt-BR'),
+    timestamp:   new Date().toISOString(),
+    hora:        new Date().toLocaleTimeString('pt-BR'),
     componentes: componentes.map(c => ({
-      id:     c.id,
-      nome:   c.nome,
-      status: c.status,
+      id:              c.id,
+      nome:            c.nome,
+      grupo:           c.grupo,
+      status:          c.status,
       status_original: c.status_original
     }))
   });
@@ -185,12 +227,19 @@ async function monitorar() {
     if (c.readyState === WebSocket.OPEN) c.send(msg);
   });
 
-  // Log
+  // Log em arquivo
   try {
-    fs.appendFileSync('monitoramento_okto.log', JSON.stringify(ultimosResultados) + '\n');
+    fs.appendFileSync('monitoramento_okto.log', JSON.stringify({
+      timestamp: ultimosResultados.timestamp,
+      resumo:    ultimosResultados.resumo,
+      geral:     ultimosResultados.geral
+    }) + '\n');
   } catch (e) {}
 
-  console.log(`[Monitor] UP: ${nUp} | DEGRADED: ${nDegraded} | DOWN: ${nDown} | ${latencia}ms`);
+  console.log(`[Monitor] Total: ${componentes.length} | UP: ${nUp} | DEGRADED: ${nDegraded} | DOWN: ${nDown} | API: ${latencia}ms`);
+  if (incidentes.length > 0) {
+    console.log(`[Monitor] Incidentes ativos: ${incidentes.map(i => i.nome).join(', ')}`);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -203,11 +252,11 @@ app.get('/api/status', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({
-    status:            'alive',
-    timestamp:         new Date().toISOString(),
-    uptime_segundos:   Math.floor(process.uptime()),
-    clientes_ws:       clientesConectados.length,
-    historico_size:    historicoDia.length,
+    status:             'alive',
+    timestamp:          new Date().toISOString(),
+    uptime_segundos:    Math.floor(process.uptime()),
+    clientes_ws:        clientesConectados.length,
+    historico_size:     historicoDia.length,
     ultima_verificacao: ultimosResultados.timestamp || null
   });
 });
@@ -218,7 +267,7 @@ app.get('/api/historico', (req, res) => {
 
   if (inicio && fim) {
     dados = dados.filter(item => {
-      const hora      = new Date(item.timestamp).getHours();
+      const hora       = new Date(item.timestamp).getHours();
       const horaInicio = parseInt(inicio);
       const horaFim    = parseInt(fim);
       return hora >= horaInicio && hora <= horaFim;
@@ -233,7 +282,7 @@ app.get('/api/historico', (req, res) => {
   }
 
   res.json({
-    total:  dados.length,
+    total:   dados.length,
     periodo: {
       inicio: dados[0]?.timestamp || null,
       fim:    dados[dados.length - 1]?.timestamp || null
@@ -249,26 +298,26 @@ app.get('/api/historico/exportar', (req, res) => {
   }
 
   const dataHoje  = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
-  const cabecalho = ['data', 'hora', 'componente_id', 'componente_nome', 'status', 'status_original'].join(';');
+  const cabecalho = ['data', 'hora', 'componente_id', 'componente_nome', 'grupo', 'status', 'status_original'].join(';');
   const linhas    = [];
 
   historicoDia.forEach(item => {
     const data = new Date(item.timestamp).toLocaleDateString('pt-BR');
     const hora = item.hora || new Date(item.timestamp).toLocaleTimeString('pt-BR');
     item.componentes.forEach(c => {
-      linhas.push([data, hora, c.id, c.nome, c.status, c.status_original].join(';'));
+      linhas.push([data, hora, c.id, c.nome, c.grupo || '', c.status, c.status_original].join(';'));
     });
   });
 
-  const csv          = '\uFEFF' + cabecalho + '\n' + linhas.join('\n');
-  const nomeArquivo  = `relatorio_okto_${dataHoje}.csv`;
+  const csv         = '\uFEFF' + cabecalho + '\n' + linhas.join('\n');
+  const nomeArquivo = `relatorio_okto_${dataHoje}.csv`;
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
   res.send(csv);
 });
 
-// Análise por hora (quantos componentes ficaram DOWN/DEGRADED por hora)
+// Análise de incidentes por hora
 app.get('/api/oscilacoes', (req, res) => {
   if (historicoDia.length < 5) {
     return res.json({ mensagem: 'Dados insuficientes (mínimo 5 verificações)', porHora: [] });
@@ -279,7 +328,12 @@ app.get('/api/oscilacoes', (req, res) => {
   historicoDia.forEach(item => {
     const hora = new Date(item.timestamp).getHours();
     if (!porHora[hora]) {
-      porHora[hora] = { hora: `${String(hora).padStart(2,'0')}:00`, verificacoes: 0, incidentes: 0, componentesAfetados: new Set() };
+      porHora[hora] = {
+        hora: `${String(hora).padStart(2, '0')}:00`,
+        verificacoes: 0,
+        incidentes: 0,
+        componentesAfetados: new Set()
+      };
     }
     porHora[hora].verificacoes++;
     item.componentes.forEach(c => {
@@ -298,7 +352,9 @@ app.get('/api/oscilacoes', (req, res) => {
     nomes_afetados:       Array.from(h.componentesAfetados)
   })).sort((a, b) => a.hora.localeCompare(b.hora));
 
-  const horarioCritico = resultado.reduce((max, h) => h.incidentes > (max?.incidentes || 0) ? h : max, null);
+  const horarioCritico = resultado.reduce(
+    (max, h) => h.incidentes > (max?.incidentes || 0) ? h : max, null
+  );
 
   res.json({ horarioCritico, porHora: resultado });
 });
@@ -315,7 +371,7 @@ function iniciarKeepAlive() {
         timeout: 5000,
         headers: { 'User-Agent': 'Internal-KeepAlive/1.0' }
       });
-      console.log(`[Keep-Alive] OK - Uptime: ${response.data.uptime_segundos}s`);
+      console.log(`[Keep-Alive] OK - Uptime: ${response.data.uptime_segundos}s | Histórico: ${response.data.historico_size} registros`);
     } catch (erro) {
       console.log(`[Keep-Alive] Erro: ${erro.message}`);
     }
@@ -334,6 +390,7 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log(`Servidor:   http://0.0.0.0:${PORTA}`);
   console.log(`StatusPage: ${STATUSPAGE_URL}`);
   console.log(`Intervalo:  ${INTERVALO_SEGUNDOS}s`);
+  console.log(`Componentes reais: filtro group === false`);
   console.log('='.repeat(60) + '\n');
 
   iniciarKeepAlive();
