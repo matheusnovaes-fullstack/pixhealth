@@ -17,6 +17,9 @@ const SELF_PING_INTERVAL = 14 * 60 * 1000;
 
 const STATUSPAGE_URL = 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json';
 
+// Componentes ignorados no monitor
+const IGNORADOS = ['RTM', 'JD', 'API Deposits', 'API Withdrawals'];
+
 // ─────────────────────────────────────────────
 // ESTADO GLOBAL
 // ─────────────────────────────────────────────
@@ -80,20 +83,20 @@ function labelStatus(status) {
   }
 }
 
-// Agrupa componentes filhos sob seu grupo pai
-// Estrutura da Okto:
-//   group: true  → componente é um grupo pai (ex: "Brazilian Banks") — NÃO exibir como card
-//   group: false → componente real (API, banco, etc.) — EXIBIR
+// ─────────────────────────────────────────────
+// SEPARAR COMPONENTES
+// group: true  → grupo pai (ex: "Brazilian Banks") — ignorar
+// group: false → componente real — exibir (exceto IGNORADOS)
+// ─────────────────────────────────────────────
+
 function separarComponentes(rawComponents) {
-  // Mapa de id → nome do grupo pai
   const grupos = {};
   rawComponents
     .filter(c => c.group === true)
     .forEach(g => { grupos[g.id] = g.name; });
 
-  // Apenas componentes reais (não grupos)
   return rawComponents
-    .filter(c => c.group === false)
+    .filter(c => c.group === false && !IGNORADOS.includes(c.name))
     .map(c => {
       const status = mapearStatus(c.status);
       return {
@@ -108,7 +111,6 @@ function separarComponentes(rawComponents) {
       };
     })
     .sort((a, b) => {
-      // Ordena: DOWN primeiro, DEGRADED segundo, UP por último
       const ordem = { DOWN: 0, DEGRADED: 1, UP: 2 };
       return (ordem[a.status] ?? 99) - (ordem[b.status] ?? 99);
     });
@@ -128,7 +130,6 @@ async function consultarStatusPage() {
     const componentes = separarComponentes(data.components || []);
     const geral       = data.status || {};
 
-    // Incidentes ativos
     const incidentes = (data.incidents || []).map(i => ({
       id:         i.id,
       nome:       i.name,
@@ -138,14 +139,13 @@ async function consultarStatusPage() {
       url:        i.shortlink || null
     }));
 
-    // Manutenções agendadas
     const manutencoes = (data.scheduled_maintenances || []).map(m => ({
-      id:          m.id,
-      nome:        m.name,
-      status:      m.status,
-      inicio:      m.scheduled_for,
-      fim:         m.scheduled_until,
-      atualizado:  m.updated_at
+      id:         m.id,
+      nome:       m.name,
+      status:     m.status,
+      inicio:     m.scheduled_for,
+      fim:        m.scheduled_until,
+      atualizado: m.updated_at
     }));
 
     return { componentes, geral, latencia, incidentes, manutencoes };
@@ -199,7 +199,6 @@ async function monitorar() {
     }
   };
 
-  // Histórico do dia — salva snapshot leve
   historicoDia.push({
     timestamp:   new Date().toISOString(),
     hora:        new Date().toLocaleTimeString('pt-BR'),
@@ -214,20 +213,17 @@ async function monitorar() {
 
   if (historicoDia.length > 1440) historicoDia.shift();
 
-  // Reset meia-noite
   const agora = new Date();
   if (agora.getHours() === 0 && agora.getMinutes() === 0) {
     console.log('[Sistema] Resetando histórico (meia-noite)');
     historicoDia = [];
   }
 
-  // Broadcast WebSocket
   const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
   clientesConectados.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(msg);
   });
 
-  // Log em arquivo
   try {
     fs.appendFileSync('monitoramento_okto.log', JSON.stringify({
       timestamp: ultimosResultados.timestamp,
@@ -291,7 +287,6 @@ app.get('/api/historico', (req, res) => {
   });
 });
 
-// Exportar CSV
 app.get('/api/historico/exportar', (req, res) => {
   if (!historicoDia.length) {
     return res.status(404).send('Nenhum dado disponível para exportar.');
@@ -317,23 +312,16 @@ app.get('/api/historico/exportar', (req, res) => {
   res.send(csv);
 });
 
-// Análise de incidentes por hora
 app.get('/api/oscilacoes', (req, res) => {
   if (historicoDia.length < 5) {
     return res.json({ mensagem: 'Dados insuficientes (mínimo 5 verificações)', porHora: [] });
   }
 
   const porHora = {};
-
   historicoDia.forEach(item => {
     const hora = new Date(item.timestamp).getHours();
     if (!porHora[hora]) {
-      porHora[hora] = {
-        hora: `${String(hora).padStart(2, '0')}:00`,
-        verificacoes: 0,
-        incidentes: 0,
-        componentesAfetados: new Set()
-      };
+      porHora[hora] = { hora: `${String(hora).padStart(2, '0')}:00`, verificacoes: 0, incidentes: 0, componentesAfetados: new Set() };
     }
     porHora[hora].verificacoes++;
     item.componentes.forEach(c => {
@@ -390,7 +378,7 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log(`Servidor:   http://0.0.0.0:${PORTA}`);
   console.log(`StatusPage: ${STATUSPAGE_URL}`);
   console.log(`Intervalo:  ${INTERVALO_SEGUNDOS}s`);
-  console.log(`Componentes reais: filtro group === false`);
+  console.log(`Ignorados:  ${IGNORADOS.join(' | ')}`);
   console.log('='.repeat(60) + '\n');
 
   iniciarKeepAlive();
