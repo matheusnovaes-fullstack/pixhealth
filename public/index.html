@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Okto Payments – Status Monitor</title>
+  <title>Pix Health Monitor</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -18,11 +19,11 @@
     /* ── CONEXÃO ── */
     .conexao-status {
       position: fixed; top: 20px; right: 20px;
-      background: #1a1a1a; border: 1px solid #2a2a2a;
+      background: #141414; border: 1px solid #222;
       padding: 8px 16px; border-radius: 20px;
       font-size: 12px; font-weight: 600;
       display: flex; align-items: center; gap: 8px;
-      z-index: 1000; color: #888;
+      z-index: 1000; color: #555;
     }
     .conexao-status.conectado { border-color: #2d5f3f; color: #4ade80; }
     .conexao-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
@@ -30,47 +31,53 @@
 
     /* ── HEADER ── */
     .header {
-      max-width: 1100px; margin: 0 auto 28px;
+      max-width: 1100px; margin: 0 auto 24px;
       display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;
     }
-    .header h1 { font-size: 26px; font-weight: 700; color: #fff; }
-    .header .sub { font-size: 13px; color: #888; margin-top: 4px; }
+    .header h1 { font-size: 24px; font-weight: 700; color: #fff; }
+    .header .sub { font-size: 13px; color: #555; margin-top: 4px; }
     .header-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .ultima-checagem { font-size: 13px; color: #888; }
-    .ultima-checagem strong { color: #fff; }
+    .ultima-checagem { font-size: 13px; color: #555; }
+    .ultima-checagem strong { color: #888; }
 
-    .btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; transition: all 0.2s; }
-    .btn-relatorios { background: #1a1a1a; border: 1px solid #2a2a2a; color: #888; }
-    .btn-relatorios:hover { border-color: #4ade80; color: #4ade80; }
+    .btn-rel {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      background: #141414; border: 1px solid #222; color: #666;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .btn-rel:hover { border-color: #4ade80; color: #4ade80; }
+    .btn-rel svg { width: 14px; height: 14px; }
 
     /* ── BANNER GERAL ── */
     .banner-geral {
-      max-width: 1100px; margin: 0 auto 24px;
-      padding: 16px 22px; border-radius: 12px;
-      font-size: 15px; font-weight: 600;
-      display: flex; align-items: center; gap: 12px;
+      max-width: 1100px; margin: 0 auto 20px;
+      padding: 14px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
       border: 1px solid;
     }
-    .banner-geral.up       { background: #0d2b1a; border-color: #2d5f3f; color: #4ade80; }
-    .banner-geral.degraded { background: #2b2000; border-color: #5f4a00; color: #fbbf24; }
-    .banner-geral.down     { background: #2b0a0a; border-color: #5f1a1a; color: #ef4444; }
-    .banner-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .banner-geral.up .banner-dot       { background: #4ade80; }
-    .banner-geral.degraded .banner-dot { background: #fbbf24; animation: pulse-dot 2s infinite; }
-    .banner-geral.down .banner-dot     { background: #ef4444; animation: pulse-dot 2s infinite; }
+    .banner-geral svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .banner-geral.up       { background: #0d2b1a; border-color: #1f4730; color: #4ade80; }
+    .banner-geral.degraded { background: #1f1600; border-color: #4a3800; color: #fbbf24; }
+    .banner-geral.down     { background: #1f0808; border-color: #4a1515; color: #ef4444; }
 
-    /* ── RESUMO ── */
+    /* ── RESUMO CHIPS ── */
     .resumo-bar {
-      max-width: 1100px; margin: 0 auto 24px;
-      display: flex; gap: 12px; flex-wrap: wrap;
+      max-width: 1100px; margin: 0 auto 20px;
+      display: flex; gap: 10px; flex-wrap: wrap;
     }
     .resumo-chip {
-      padding: 6px 16px; border-radius: 20px;
-      font-size: 13px; font-weight: 600; border: 1px solid;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 20px;
+      font-size: 12px; font-weight: 600; border: 1px solid;
     }
-    .chip-up       { background: #0d2b1a; border-color: #2d5f3f; color: #4ade80; }
-    .chip-degraded { background: #2b2000; border-color: #5f4a00; color: #fbbf24; }
-    .chip-down     { background: #2b0a0a; border-color: #5f1a1a; color: #ef4444; }
+    .resumo-chip svg { width: 12px; height: 12px; }
+    .chip-up       { background: #0d2b1a; border-color: #1f4730; color: #4ade80; }
+    .chip-degraded { background: #1f1600; border-color: #4a3800; color: #fbbf24; }
+    .chip-down     { background: #1f0808; border-color: #4a1515; color: #ef4444; }
+    .chip-total    { background: #141414; border-color: #222; color: #555; }
 
     /* ── GRID ── */
     .componentes-grid {
@@ -82,25 +89,22 @@
 
     /* ── CARD ── */
     .comp-card {
-      background: #141414;
-      border: 1.5px solid #222;
-      border-radius: 14px;
-      padding: 20px;
+      background: #141414; border: 1.5px solid #1e1e1e;
+      border-radius: 14px; padding: 20px;
       transition: all 0.25s;
     }
-    .comp-card:hover { transform: translateY(-2px); border-color: #333; }
-
+    .comp-card:hover { transform: translateY(-2px); }
     .comp-card.up       { border-color: #1f4730; }
-    .comp-card.degraded { border-color: #4a3800; animation: pulse-border-yellow 2s infinite; }
-    .comp-card.down     { border-color: #4a1515; animation: pulse-border-red 2s infinite; }
+    .comp-card.degraded { border-color: #4a3800; animation: pulse-border-yellow 2.5s infinite; }
+    .comp-card.down     { border-color: #4a1515; animation: pulse-border-red 2.5s infinite; }
 
     @keyframes pulse-border-red {
       0%,100% { border-color: #4a1515; }
-      50%     { border-color: #dc3545; box-shadow: 0 0 16px rgba(220,53,69,0.25); }
+      50%     { border-color: #dc3545; box-shadow: 0 0 14px rgba(220,53,69,0.2); }
     }
     @keyframes pulse-border-yellow {
       0%,100% { border-color: #4a3800; }
-      50%     { border-color: #d97706; box-shadow: 0 0 16px rgba(217,119,6,0.2); }
+      50%     { border-color: #d97706; box-shadow: 0 0 14px rgba(217,119,6,0.15); }
     }
     @keyframes pulse-dot {
       0%,100% { opacity: 1; }
@@ -112,37 +116,39 @@
       margin-bottom: 14px;
     }
     .card-nome-wrap { display: flex; align-items: center; gap: 10px; }
-    .card-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .comp-card.up .card-dot       { background: #4ade80; }
-    .comp-card.degraded .card-dot { background: #fbbf24; animation: pulse-dot 2s infinite; }
-    .comp-card.down .card-dot     { background: #ef4444; animation: pulse-dot 2s infinite; }
+    .card-icon { width: 16px; height: 16px; flex-shrink: 0; }
+    .comp-card.up .card-icon       { color: #4ade80; }
+    .comp-card.degraded .card-icon { color: #fbbf24; animation: pulse-dot 2s infinite; }
+    .comp-card.down .card-icon     { color: #ef4444; animation: pulse-dot 2s infinite; }
 
-    .card-nome { font-size: 16px; font-weight: 600; color: #fff; }
+    .card-nome { font-size: 15px; font-weight: 600; color: #fff; }
 
     .status-badge {
-      padding: 3px 12px; border-radius: 6px;
-      font-size: 11px; font-weight: 700;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 6px;
+      font-size: 10px; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.5px;
     }
+    .status-badge svg { width: 10px; height: 10px; }
     .comp-card.up .status-badge       { background: #0d2b1a; color: #4ade80; }
-    .comp-card.degraded .status-badge { background: #2b2000; color: #fbbf24; }
-    .comp-card.down .status-badge     { background: #2b0a0a; color: #ef4444; }
+    .comp-card.degraded .status-badge { background: #1f1600; color: #fbbf24; }
+    .comp-card.down .status-badge     { background: #1f0808; color: #ef4444; }
 
     .card-body { display: flex; flex-direction: column; gap: 8px; }
-    .info-row { display: flex; justify-content: space-between; font-size: 13px; }
-    .info-label { color: #666; }
-    .info-val   { color: #ccc; font-weight: 500; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .info-label { color: #555; display: flex; align-items: center; gap: 5px; }
+    .info-label svg { width: 12px; height: 12px; }
+    .info-val { color: #aaa; font-weight: 500; font-size: 12px; }
 
     .descricao-box {
-      margin-top: 10px; padding: 10px 12px;
+      margin-top: 8px; padding: 10px 12px;
       background: #0f0f0f; border-radius: 8px;
-      font-size: 12px; color: #aaa; line-height: 1.6;
-      border-left: 3px solid #fbbf24;
+      font-size: 12px; color: #888; line-height: 1.6;
     }
-    .comp-card.down .descricao-box { border-left-color: #ef4444; }
+    .comp-card.degraded .descricao-box { border-left: 3px solid #fbbf24; }
+    .comp-card.down .descricao-box     { border-left: 3px solid #ef4444; }
 
-    /* ── LOADING ── */
-    .loading { grid-column: 1 / -1; text-align: center; padding: 60px; color: #666; font-size: 15px; }
+    .loading { grid-column: 1 / -1; text-align: center; padding: 60px; color: #444; font-size: 14px; }
 
     @media (max-width: 768px) {
       .componentes-grid { grid-template-columns: 1fr; }
@@ -159,34 +165,34 @@
 
   <div class="header">
     <div>
-      <h1>Okto Payments – Status Monitor</h1>
-      <div class="sub">Monitoramento em tempo real via StatusPage oficial</div>
+      <h1>Pix Health Monitor</h1>
+      <div class="sub">Monitoramento em tempo real via StatusPage oficial da Okto</div>
     </div>
     <div class="header-controls">
       <div class="ultima-checagem">
         Última verificação <strong id="ultimaAtualizacao">--:--:--</strong>
       </div>
-      <a href="/relatorios.html" class="btn btn-relatorios">Relatórios</a>
+      <a href="/relatorios.html" class="btn-rel">
+        <i data-lucide="bar-chart-2"></i> Relatórios
+      </a>
     </div>
   </div>
 
-  <!-- Banner geral -->
   <div class="banner-geral up" id="bannerGeral">
-    <div class="banner-dot"></div>
+    <i data-lucide="check-circle" id="bannerIcon"></i>
     <span id="bannerTexto">Carregando status geral...</span>
   </div>
 
-  <!-- Chips de resumo -->
   <div class="resumo-bar" id="resumoBar"></div>
 
-  <!-- Grid de componentes -->
   <div class="componentes-grid" id="componentesGrid">
     <div class="loading">Carregando componentes...</div>
   </div>
 
   <script>
-    let ws;
-    let tentativas = 0;
+    lucide.createIcons();
+
+    let ws, tentativas = 0;
 
     function conectarWS() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -197,107 +203,116 @@
         document.getElementById('conexaoStatus').className = 'conexao-status conectado';
         document.getElementById('conexaoTexto').textContent = 'Online';
       };
-
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
           if (msg.tipo === 'atualizacao') renderDashboard(msg.dados);
         } catch {}
       };
-
       ws.onclose = () => {
         document.getElementById('conexaoStatus').className = 'conexao-status';
         document.getElementById('conexaoTexto').textContent = 'Offline';
-        if (tentativas < 6) { tentativas++; setTimeout(conectarWS, 4000); }
+        if (tentativas < 8) { tentativas++; setTimeout(conectarWS, 4000); }
       };
     }
 
     function renderDashboard(dados) {
-      // Hora
       document.getElementById('ultimaAtualizacao').textContent =
         new Date(dados.timestamp).toLocaleTimeString('pt-BR');
 
       const { resumo, componentes, geral } = dados;
 
-      // Banner geral
+      // Banner
       const banner = document.getElementById('bannerGeral');
       const ind = geral?.indicator || 'none';
-      let bannerClasse = 'up', bannerMsg = '✅ Todos os sistemas operacionais';
-      if (ind === 'critical' || ind === 'major') {
-        bannerClasse = 'down';
-        bannerMsg = '🔴 Interrupção confirmada em um ou mais sistemas';
-      } else if (ind === 'minor' || ind === 'maintenance') {
-        bannerClasse = 'degraded';
-        bannerMsg = '🟡 Degradação ou manutenção em andamento';
-      } else if (resumo.down > 0) {
-        bannerClasse = 'down';
-        bannerMsg = `🔴 ${resumo.down} sistema(s) fora do ar`;
-      } else if (resumo.degraded > 0) {
-        bannerClasse = 'degraded';
-        bannerMsg = `🟡 ${resumo.degraded} sistema(s) degradado(s)`;
+      let cls = 'up', icone = 'check-circle', msg = 'Todos os sistemas operacionais';
+
+      if (resumo.down > 0 || ind === 'critical' || ind === 'major') {
+        cls = 'down'; icone = 'x-circle';
+        msg = resumo.down > 0 ? `${resumo.down} sistema(s) fora do ar` : 'Interrupção confirmada';
+      } else if (resumo.degraded > 0 || ind === 'minor' || ind === 'maintenance') {
+        cls = 'degraded'; icone = 'alert-triangle';
+        msg = resumo.degraded > 0 ? `${resumo.degraded} sistema(s) com degradação` : 'Degradação ou manutenção em andamento';
       }
-      banner.className = 'banner-geral ' + bannerClasse;
-      document.getElementById('bannerTexto').textContent = bannerMsg + (geral?.description ? ` — ${geral.description}` : '');
+      if (geral?.description) msg += ` — ${geral.description}`;
+
+      banner.className = 'banner-geral ' + cls;
+      banner.innerHTML = `<i data-lucide="${icone}"></i><span>${msg}</span>`;
 
       // Chips
       document.getElementById('resumoBar').innerHTML = `
-        <div class="resumo-chip chip-up">✅ UP: ${resumo.up}</div>
-        ${resumo.degraded > 0 ? `<div class="resumo-chip chip-degraded">🟡 DEGRADED: ${resumo.degraded}</div>` : ''}
-        ${resumo.down > 0     ? `<div class="resumo-chip chip-down">🔴 DOWN: ${resumo.down}</div>` : ''}
-        <div class="resumo-chip" style="background:#1a1a1a;border-color:#2a2a2a;color:#666">Total: ${resumo.total}</div>
+        <div class="resumo-chip chip-up">
+          <i data-lucide="check-circle"></i> OPERACIONAL: ${resumo.up}
+        </div>
+        ${resumo.degraded > 0 ? `
+        <div class="resumo-chip chip-degraded">
+          <i data-lucide="alert-triangle"></i> DEGRADAÇÃO: ${resumo.degraded}
+        </div>` : ''}
+        ${resumo.down > 0 ? `
+        <div class="resumo-chip chip-down">
+          <i data-lucide="x-circle"></i> DOWN: ${resumo.down}
+        </div>` : ''}
+        <div class="resumo-chip chip-total">
+          <i data-lucide="layers"></i> Total: ${resumo.total}
+        </div>
       `;
 
       // Cards
       const grid = document.getElementById('componentesGrid');
       grid.innerHTML = '';
-
-      // Ordena: DOWN primeiro, depois DEGRADED, depois UP
       const ordem = { DOWN: 0, DEGRADED: 1, UP: 2 };
-      const ordenados = [...componentes].sort((a, b) => (ordem[a.status] || 99) - (ordem[b.status] || 99));
+      [...componentes]
+        .sort((a, b) => (ordem[a.status] ?? 99) - (ordem[b.status] ?? 99))
+        .forEach(c => {
+          const card = document.createElement('div');
+          card.className = 'comp-card ' + c.status.toLowerCase();
 
-      ordenados.forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'comp-card ' + c.status.toLowerCase();
+          const atualizado = c.atualizado_em
+            ? new Date(c.atualizado_em).toLocaleString('pt-BR')
+            : '—';
 
-        const atualizado = c.atualizado_em
-          ? new Date(c.atualizado_em).toLocaleString('pt-BR')
-          : '—';
+          const iconeCard = c.status === 'UP' ? 'check-circle'
+                          : c.status === 'DEGRADED' ? 'alert-triangle'
+                          : 'x-circle';
 
-        const descHtml = (c.status !== 'UP' && c.descricao)
-          ? `<div class="descricao-box">${c.descricao}</div>`
-          : '';
+          const descHtml = c.status !== 'UP' && c.descricao
+            ? `<div class="descricao-box">${c.descricao}</div>`
+            : '';
 
-        card.innerHTML = `
-          <div class="card-header">
-            <div class="card-nome-wrap">
-              <div class="card-dot"></div>
-              <div class="card-nome">${c.nome}</div>
+          card.innerHTML = `
+            <div class="card-header">
+              <div class="card-nome-wrap">
+                <i data-lucide="${iconeCard}" class="card-icon"></i>
+                <div class="card-nome">${c.nome}</div>
+              </div>
+              <div class="status-badge">
+                <i data-lucide="${iconeCard}"></i>
+                ${c.label}
+              </div>
             </div>
-            <div class="status-badge">${c.label}</div>
-          </div>
-          <div class="card-body">
-            <div class="info-row">
-              <span class="info-label">Status original</span>
-              <span class="info-val">${c.status_original}</span>
+            <div class="card-body">
+              <div class="info-row">
+                <span class="info-label"><i data-lucide="activity"></i> Status original</span>
+                <span class="info-val">${c.status_original}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label"><i data-lucide="clock"></i> Atualizado em</span>
+                <span class="info-val">${atualizado}</span>
+              </div>
+              ${descHtml}
             </div>
-            <div class="info-row">
-              <span class="info-label">Atualizado em</span>
-              <span class="info-val">${atualizado}</span>
-            </div>
-            ${descHtml}
-          </div>
-        `;
+          `;
+          grid.appendChild(card);
+        });
 
-        grid.appendChild(card);
-      });
+      lucide.createIcons();
     }
 
-    // Inicializa
     setTimeout(() => {
       conectarWS();
       fetch('/api/status')
         .then(r => r.json())
-        .then(dados => { if (dados?.componentes) renderDashboard(dados); })
+        .then(d => { if (d?.componentes) renderDashboard(d); })
         .catch(() => {});
     }, 400);
   </script>
