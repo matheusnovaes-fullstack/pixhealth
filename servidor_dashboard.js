@@ -130,13 +130,19 @@ async function consultarStatusPage() {
     const componentes = separarComponentes(data.components || []);
     const geral       = data.status || {};
 
+    // Incidentes ativos — inclui histórico de atualizações para o modal
     const incidentes = (data.incidents || []).map(i => ({
       id:         i.id,
       nome:       i.name,
       status:     i.status,
       impacto:    i.impact,
       atualizado: i.updated_at,
-      url:        i.shortlink || null
+      url:        i.shortlink || null,
+      updates:    (i.incident_updates || []).map(u => ({
+        status:     u.status,
+        body:       u.body,
+        updated_at: u.updated_at
+      }))
     }));
 
     const manutencoes = (data.scheduled_maintenances || []).map(m => ({
