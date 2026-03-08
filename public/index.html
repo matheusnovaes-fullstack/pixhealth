@@ -3,262 +3,317 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pix Health Monitor</title>
+  <title>Pix Health Monitor — Okto Payments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     :root {
-      --bg:        #080808;
-      --surface:   #111111;
-      --border:    #1c1c1c;
-      --border-md: #242424;
-      --text:      #e8e8e8;
-      --muted:     #555;
-      --faint:     #333;
-      --green:     #22c55e;
-      --green-dim: #0d2b1a;
-      --green-bd:  #1a4d30;
-      --yellow:    #eab308;
-      --yellow-dim:#1e1600;
-      --yellow-bd: #3d2e00;
-      --red:       #ef4444;
-      --red-dim:   #1a0808;
-      --red-bd:    #3d1212;
-      --blue:      #60a5fa;
-      --blue-dim:  #0a1628;
-      --blue-bd:   #1e3356;
+      --bg:          #060608;
+      --bg2:         #0a0a0d;
+      --surface:     #0f0f13;
+      --surface2:    #141418;
+      --border:      #1a1a20;
+      --border-md:   #222228;
+      --border-hi:   #2e2e38;
+      --text:        #f0f0f5;
+      --text-2:      #a0a0b0;
+      --muted:       #4a4a5a;
+      --faint:       #252530;
+      --green:       #1fd97a;
+      --green-dim:   #071a10;
+      --green-bd:    #0f3320;
+      --green-glow:  rgba(31,217,122,0.12);
+      --yellow:      #f5c842;
+      --yellow-dim:  #1a1400;
+      --yellow-bd:   #352800;
+      --yellow-glow: rgba(245,200,66,0.1);
+      --red:         #ff4d4d;
+      --red-dim:     #1a0606;
+      --red-bd:      #3a0e0e;
+      --red-glow:    rgba(255,77,77,0.12);
+      --blue:        #5b9ef7;
+      --mono:        'JetBrains Mono', monospace;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* ─── TOPBAR ─── */
     .topbar {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.92);
-      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(6,6,8,0.95);
+      backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      height: 56px;
+      padding: 0 36px; height: 58px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .topbar-left { display: flex; align-items: center; gap: 16px; }
-    .topbar-logo {
-      display: flex; align-items: center; gap: 9px;
-      font-size: 15px; font-weight: 700; color: var(--text);
+    .topbar-logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--green-dim); border: 1px solid var(--green-bd);
+      display: flex; align-items: center; justify-content: center;
     }
-    .topbar-logo svg { width: 18px; height: 18px; color: var(--green); }
-    .topbar-sep { width: 1px; height: 18px; background: var(--border-md); }
-    .topbar-sub { font-size: 12px; color: var(--muted); }
-
-    .topbar-right { display: flex; align-items: center; gap: 16px; }
-    .topbar-time { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-    .topbar-time svg { width: 12px; height: 12px; }
-
+    .logo-icon svg { width: 15px; height: 15px; color: var(--green); }
+    .logo-name { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
+    .logo-tag {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      background: var(--surface2); border: 1px solid var(--border-md);
+      padding: 2px 8px; border-radius: 4px; letter-spacing: 0.4px;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-clock {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      color: var(--text-2); background: var(--surface);
+      border: 1px solid var(--border-md); padding: 5px 12px; border-radius: 6px;
+    }
     .ws-pill {
       display: flex; align-items: center; gap: 6px;
-      padding: 4px 12px; border-radius: 20px;
-      border: 1px solid var(--border-md);
-      font-size: 11px; font-weight: 600; color: var(--muted);
-      transition: all 0.3s;
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid var(--border-md); font-size: 11px; font-weight: 600;
+      color: var(--muted); background: var(--surface); transition: all 0.3s;
     }
-    .ws-pill.ok { border-color: var(--green-bd); color: var(--green); }
-    .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
+    .ws-pill.ok { border-color: var(--green-bd); color: var(--green); background: var(--green-dim); }
+    .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
     .ws-pill.ok .ws-dot { background: var(--green); animation: blink 2s infinite; }
-
-    .btn-rel {
+    .btn-nav {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 14px; border-radius: 7px;
+      padding: 6px 14px; border-radius: 6px;
       font-size: 12px; font-weight: 600;
-      background: var(--surface); border: 1px solid var(--border-md);
-      color: var(--muted); text-decoration: none; transition: all 0.2s;
+      background: var(--surface2); border: 1px solid var(--border-md);
+      color: var(--text-2); text-decoration: none; transition: all 0.2s;
     }
-    .btn-rel svg { width: 13px; height: 13px; }
-    .btn-rel:hover { border-color: var(--green-bd); color: var(--green); }
+    .btn-nav svg { width: 13px; height: 13px; }
+    .btn-nav:hover { border-color: var(--green-bd); color: var(--green); background: var(--green-dim); }
 
-    /* ─── LAYOUT ─── */
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
+    /* ─── WRAP ─── */
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 28px 80px; }
 
-    /* ─── BANNER GERAL ─── */
-    .banner {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 20px; border-radius: 12px;
-      margin-bottom: 8px; border: 1px solid;
-      font-size: 14px; font-weight: 600;
-      transition: all 0.4s;
+    /* ─── HERO ─── */
+    .hero { display: flex; gap: 12px; margin-bottom: 10px; }
+    .hero-banner {
+      flex: 1; display: flex; align-items: center; gap: 14px;
+      padding: 18px 24px; border-radius: 12px; border: 1px solid;
+      font-size: 15px; font-weight: 600; letter-spacing: -0.2px; transition: all 0.4s;
     }
-    .banner svg { width: 16px; height: 16px; flex-shrink: 0; }
-    .banner.up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
-    .banner.degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
-    .banner.down     { background: var(--red-dim);    border-color: var(--red-bd);   color: var(--red);
-                       animation: pulse-banner 2s infinite; }
+    .hero-banner svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .hero-banner.up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
+    .hero-banner.degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
+    .hero-banner.down     { background: var(--red-dim); border-color: var(--red-bd); color: var(--red); animation: pulse-banner 2s infinite; }
     @keyframes pulse-banner {
       0%,100% { box-shadow: none; }
-      50%     { box-shadow: 0 0 20px rgba(239,68,68,0.15); }
+      50%     { box-shadow: 0 0 28px var(--red-glow); }
     }
+    .hero-meta {
+      display: flex; flex-direction: column; align-items: flex-end;
+      justify-content: center; gap: 3px; padding: 16px 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      min-width: 170px;
+    }
+    .hero-meta-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+    .hero-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text-2); }
 
-    /* ─── INCIDENTES ATIVOS ─── */
-    .incidentes-wrap { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
-    .incidente-card {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 12px 16px; border-radius: 10px;
-      background: var(--red-dim); border: 1px solid var(--red-bd);
-      font-size: 13px;
-    }
-    .incidente-card svg { width: 15px; height: 15px; color: var(--red); flex-shrink: 0; margin-top: 1px; }
-    .incidente-nome { font-weight: 600; color: var(--red); margin-bottom: 2px; }
-    .incidente-meta { font-size: 11px; color: var(--muted); }
-
-    /* ─── CHIPS RESUMO ─── */
-    .resumo-chips {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; margin-top: 12px;
-    }
+    /* ─── CHIPS ─── */
+    .resumo-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; margin-top: 10px; }
     .chip {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 13px; border-radius: 20px;
+      padding: 5px 14px; border-radius: 6px;
       font-size: 11px; font-weight: 700; border: 1px solid;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.4px; font-family: var(--mono);
     }
-    .chip svg { width: 11px; height: 11px; }
+    .chip svg { width: 10px; height: 10px; }
     .chip-up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
     .chip-degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
     .chip-down     { background: var(--red-dim); border-color: var(--red-bd); color: var(--red); }
     .chip-total    { background: var(--surface); border-color: var(--border-md); color: var(--muted); }
 
     /* ─── SEÇÃO ─── */
-    .section { margin-bottom: 32px; }
+    .section { margin-bottom: 36px; }
     .section-header {
       display: flex; align-items: center; gap: 10px;
-      margin-bottom: 14px; padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
     }
-    .section-header svg { width: 15px; height: 15px; color: var(--muted); }
-    .section-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; }
-    .section-count {
-      margin-left: auto;
-      font-size: 11px; color: var(--faint); font-weight: 600;
+    .section-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: var(--surface2); border: 1px solid var(--border-md);
+      display: flex; align-items: center; justify-content: center;
     }
+    .section-icon svg { width: 13px; height: 13px; color: var(--text-2); }
+    .section-title { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 1px; }
+    .section-count { margin-left: auto; font-size: 11px; color: var(--muted); font-family: var(--mono); }
 
     /* ─── GRID ─── */
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 10px;
-    }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
 
     /* ─── CARD ─── */
     .comp-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px 18px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
       transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
-      cursor: default;
     }
-    .comp-card:hover { transform: translateY(-1px); border-color: var(--border-md); }
+    .comp-card:hover { transform: translateY(-2px); }
+    .card-accent { height: 3px; }
+    .comp-card.up       .card-accent { background: var(--green-bd); }
+    .comp-card.degraded .card-accent { background: var(--yellow); animation: bar-blink 2s infinite; }
+    .comp-card.down     .card-accent { background: var(--red); animation: bar-blink 1.5s infinite; }
+    @keyframes bar-blink { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
 
     .comp-card.up       { border-color: var(--green-bd); }
-    .comp-card.degraded {
-      border-color: var(--yellow-bd);
-      animation: pulse-yellow 2.5s infinite;
-    }
-    .comp-card.down {
-      border-color: var(--red-bd);
-      animation: pulse-red 2s infinite;
-    }
+    .comp-card.degraded { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
+    .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red   2s infinite; }
 
     @keyframes pulse-red {
       0%,100% { border-color: var(--red-bd); box-shadow: none; }
-      50%     { border-color: var(--red); box-shadow: 0 0 12px rgba(239,68,68,0.18); }
+      50%     { border-color: var(--red); box-shadow: 0 0 16px var(--red-glow); }
     }
     @keyframes pulse-yellow {
       0%,100% { border-color: var(--yellow-bd); box-shadow: none; }
-      50%     { border-color: var(--yellow); box-shadow: 0 0 12px rgba(234,179,8,0.12); }
+      50%     { border-color: var(--yellow); box-shadow: 0 0 16px var(--yellow-glow); }
     }
-    @keyframes blink {
-      0%,100% { opacity: 1; }
-      50%     { opacity: 0.3; }
-    }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
 
-    .card-top {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 12px;
-    }
-    .card-left { display: flex; align-items: center; gap: 9px; min-width: 0; }
-    .card-icon { width: 14px; height: 14px; flex-shrink: 0; }
-    .comp-card.up       .card-icon { color: var(--green); }
-    .comp-card.degraded .card-icon { color: var(--yellow); animation: blink 2s infinite; }
-    .comp-card.down     .card-icon { color: var(--red);    animation: blink 1.5s infinite; }
-
+    .card-body { padding: 16px 18px 18px; }
+    .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .comp-card.up       .card-dot { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+    .comp-card.degraded .card-dot { background: var(--yellow); animation: blink 2s infinite; }
+    .comp-card.down     .card-dot { background: var(--red); animation: blink 1.5s infinite; }
     .card-nome {
-      font-size: 14px; font-weight: 600; color: var(--text);
+      font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-
     .status-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 9px; border-radius: 5px; flex-shrink: 0;
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.4px;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 5px; flex-shrink: 0;
+      font-size: 10px; font-weight: 700; font-family: var(--mono);
+      text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid;
     }
     .status-badge svg { width: 9px; height: 9px; }
-    .comp-card.up       .status-badge { background: var(--green-dim); color: var(--green); }
-    .comp-card.degraded .status-badge { background: var(--yellow-dim); color: var(--yellow); }
-    .comp-card.down     .status-badge { background: var(--red-dim);    color: var(--red); }
-
-    .card-meta {
-      display: flex; justify-content: space-between;
-      font-size: 11px; color: var(--muted);
-    }
-    .card-meta-item { display: flex; align-items: center; gap: 4px; }
+    .comp-card.up       .status-badge { background: var(--green-dim); color: var(--green); border-color: var(--green-bd); }
+    .comp-card.degraded .status-badge { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.down     .status-badge { background: var(--red-dim); color: var(--red); border-color: var(--red-bd); }
+    .card-divider { height: 1px; background: var(--border); margin-bottom: 12px; }
+    .card-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .card-meta-item { display: flex; align-items: center; gap: 4px; font-family: var(--mono); }
     .card-meta-item svg { width: 10px; height: 10px; }
 
-    .card-desc {
-      margin-top: 10px; padding: 9px 12px;
-      background: var(--bg); border-radius: 7px;
-      font-size: 11px; color: #888; line-height: 1.6;
-      border-left: 2px solid;
+    /* Botão incidente — oculto por padrão, aparece só quando há incidente */
+    .btn-incidente {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      margin-top: 13px; padding: 8px 14px; border-radius: 7px;
+      font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--mono);
+      border: 1px solid; transition: all 0.2s; width: 100%;
+      background: transparent; letter-spacing: 0.4px; text-transform: uppercase;
     }
-    .comp-card.degraded .card-desc { border-left-color: var(--yellow); }
-    .comp-card.down     .card-desc { border-left-color: var(--red); }
+    .btn-incidente svg { width: 12px; height: 12px; }
+    .comp-card.degraded .btn-incidente { color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.degraded .btn-incidente:hover { background: var(--yellow-dim); }
+    .comp-card.down     .btn-incidente { color: var(--red); border-color: var(--red-bd); }
+    .comp-card.down     .btn-incidente:hover { background: var(--red-dim); }
 
-    /* ─── LOADING ─── */
-    .loading-grid { grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--faint); font-size: 13px; }
+    /* ─── MODAL ─── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+      z-index: 500; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; animation: fadeIn 0.15s; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 
-    /* ─── RESPONSIVE ─── */
+    .modal {
+      background: var(--surface2); border: 1px solid var(--border-hi);
+      border-radius: 14px; width: 100%; max-width: 580px;
+      max-height: 82vh; overflow-y: auto; margin: 20px;
+      animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(18px) scale(0.98); opacity:0; }
+      to   { transform: translateY(0)    scale(1);    opacity:1; }
+    }
+    .modal-top-bar { height: 3px; background: var(--red); border-radius: 14px 14px 0 0; }
+    .modal-top-bar.degraded { background: var(--yellow); }
+    .modal-inner { padding: 24px 28px 28px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+    .modal-titulo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .modal-sub { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+    .modal-fechar {
+      background: var(--surface); border: 1px solid var(--border-md);
+      color: var(--muted); cursor: pointer; padding: 6px; border-radius: 7px;
+      display: flex; align-items: center; transition: all 0.2s; flex-shrink: 0;
+    }
+    .modal-fechar:hover { background: var(--faint); color: var(--text); }
+    .modal-fechar svg { width: 14px; height: 14px; }
+    .modal-pills { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .modal-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 5px;
+      font-size: 10px; font-weight: 700; border: 1px solid;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.4px;
+      text-decoration: none;
+    }
+    .modal-pill svg { width: 10px; height: 10px; }
+    .pill-red    { background: var(--red-dim);    color: var(--red);    border-color: var(--red-bd); }
+    .pill-yellow { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .pill-green  { background: var(--green-dim);  color: var(--green);  border-color: var(--green-bd); }
+    .pill-muted  { background: var(--surface);    color: var(--muted);  border-color: var(--border-md); }
+    .modal-section-label {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .modal-section-label svg { width: 11px; height: 11px; }
+    .updates-list { display: flex; flex-direction: column; gap: 8px; }
+    .update-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 13px 15px; border-left: 2px solid var(--yellow);
+    }
+    .update-item.resolved     { border-left-color: var(--green); }
+    .update-item.investigating{ border-left-color: var(--red); }
+    .update-status { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; font-family: var(--mono); }
+    .update-body   { font-size: 12px; color: var(--text-2); line-height: 1.65; }
+    .update-time   { font-size: 10px; color: var(--muted); margin-top: 7px; font-family: var(--mono); }
+    .modal-no-updates {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 16px; text-align: center;
+      font-size: 12px; color: var(--muted);
+    }
+
+    /* ─── MISC ─── */
+    .loading-grid { grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--muted); font-size: 13px; }
+
     @media (max-width: 768px) {
-      .topbar { padding: 0 16px; }
-      .topbar-sub, .topbar-sep { display: none; }
-      .wrap { padding: 20px 16px 50px; }
+      .topbar { padding: 0 18px; }
+      .logo-tag { display: none; }
+      .wrap { padding: 20px 16px 60px; }
       .cards-grid { grid-template-columns: 1fr; }
+      .hero { flex-direction: column; }
+      .hero-meta { flex-direction: row; justify-content: space-between; min-width: unset; }
     }
   </style>
 </head>
 <body>
 
-  <!-- TOPBAR -->
   <header class="topbar">
-    <div class="topbar-left">
-      <div class="topbar-logo">
-        <i data-lucide="activity"></i>
-        Pix Health Monitor
-      </div>
-
+    <div class="topbar-logo">
+      <div class="logo-icon"><i data-lucide="activity"></i></div>
+      <span class="logo-name">Pix Health Monitor</span>
+      <span class="logo-tag">OKTO PAYMENTS</span>
     </div>
     <div class="topbar-right">
-      <div class="topbar-time">
-        <i data-lucide="clock"></i>
-        <span>Última verificação: <strong id="ultimaAtt">--:--:--</strong></span>
-      </div>
+      <div class="topbar-clock" id="relogio">--:--:--</div>
       <div class="ws-pill" id="wsPill">
         <div class="ws-dot"></div>
         <span id="wsTexto">Conectando</span>
       </div>
-      <a href="/relatorios.html" class="btn-rel">
+      <a href="/relatorios.html" class="btn-nav">
         <i data-lucide="bar-chart-2"></i> Relatórios
       </a>
     </div>
@@ -266,23 +321,23 @@
 
   <div class="wrap">
 
-    <!-- BANNER GERAL -->
-    <div class="banner up" id="banner">
-      <i data-lucide="check-circle"></i>
-      <span id="bannerTexto">Carregando status...</span>
+    <div class="hero">
+      <div class="hero-banner up" id="banner">
+        <i data-lucide="check-circle"></i>
+        <span>Carregando status...</span>
+      </div>
+      <div class="hero-meta">
+        <span class="hero-meta-label">Última verificação</span>
+        <span class="hero-meta-val" id="ultimaAtt">--:--:--</span>
+      </div>
     </div>
 
-    <!-- INCIDENTES ATIVOS -->
-    <div class="incidentes-wrap" id="incidentesWrap"></div>
-
-    <!-- CHIPS -->
     <div class="resumo-chips" id="chips"></div>
 
-    <!-- SEÇÃO: APIS -->
-    <div class="section" id="secao-apis">
+    <div class="section">
       <div class="section-header">
-        <i data-lucide="zap"></i>
-        <span class="section-title">APIs & Infraestrutura</span>
+        <div class="section-icon"><i data-lucide="zap"></i></div>
+        <span class="section-title">APIs &amp; Infraestrutura</span>
         <span class="section-count" id="count-apis"></span>
       </div>
       <div class="cards-grid" id="grid-apis">
@@ -290,10 +345,9 @@
       </div>
     </div>
 
-    <!-- SEÇÃO: BANCOS -->
-    <div class="section" id="secao-bancos">
+    <div class="section">
       <div class="section-header">
-        <i data-lucide="landmark"></i>
+        <div class="section-icon"><i data-lucide="landmark"></i></div>
         <span class="section-title">Instituições Bancárias</span>
         <span class="section-count" id="count-bancos"></span>
       </div>
@@ -304,10 +358,36 @@
 
   </div>
 
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
+    <div class="modal">
+      <div class="modal-top-bar" id="modalBar"></div>
+      <div class="modal-inner">
+        <div class="modal-header">
+          <div>
+            <div class="modal-titulo" id="modalTitulo">—</div>
+            <div class="modal-sub" id="modalSub">—</div>
+          </div>
+          <button class="modal-fechar" onclick="fecharModalBtn()">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="modal-pills" id="modalPills"></div>
+        <div class="modal-section-label"><i data-lucide="list"></i> Atualizações do Incidente</div>
+        <div class="updates-list" id="modalUpdates"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     lucide.createIcons();
 
+    // Relógio ao vivo
+    function tick() { document.getElementById('relogio').textContent = new Date().toLocaleTimeString('pt-BR'); }
+    tick(); setInterval(tick, 1000);
+
     let ws, tentativas = 0;
+    let incidentesAtivos = [];
 
     function conectarWS() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -317,11 +397,8 @@
         document.getElementById('wsPill').className = 'ws-pill ok';
         document.getElementById('wsTexto').textContent = 'Ao vivo';
       };
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.tipo === 'atualizacao') render(msg.dados);
-        } catch {}
+      ws.onmessage = e => {
+        try { const m = JSON.parse(e.data); if (m.tipo === 'atualizacao') render(m.dados); } catch {}
       };
       ws.onclose = () => {
         document.getElementById('wsPill').className = 'ws-pill';
@@ -330,48 +407,55 @@
       };
     }
 
-    function iconeStatus(status) {
-      return status === 'UP' ? 'check-circle' : status === 'DEGRADED' ? 'alert-triangle' : 'x-circle';
+    function icone(s) { return s==='UP'?'check-circle':s==='DEGRADED'?'alert-triangle':'x-circle'; }
+
+    function fmt(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     }
 
     function criarCard(c) {
-      const ic = iconeStatus(c.status);
-      const att = c.atualizado_em ? new Date(c.atualizado_em).toLocaleString('pt-BR') : '—';
-      const descHtml = c.status !== 'UP' && c.descricao
-        ? `<div class="card-desc">${c.descricao}</div>` : '';
+      const ic  = icone(c.status);
+      const att = fmt(c.atualizado_em);
+
+      const inc = c.status !== 'UP'
+        ? incidentesAtivos.find(i =>
+            i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
+            c.nome.toLowerCase().includes(i.nome.toLowerCase())
+          ) || (incidentesAtivos.length === 1 ? incidentesAtivos[0] : null)
+        : null;
+
+      const btn = inc
+        ? `<button class="btn-incidente" onclick="abrirModal('${inc.id}')">
+             <i data-lucide="file-text"></i> Log do Incidente
+           </button>`
+        : '';
 
       return `
         <div class="comp-card ${c.status.toLowerCase()}">
-          <div class="card-top">
-            <div class="card-left">
-              <i data-lucide="${ic}" class="card-icon"></i>
-              <span class="card-nome">${c.nome}</span>
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left">
+                <div class="card-dot"></div>
+                <span class="card-nome">${c.nome}</span>
+              </div>
+              <div class="status-badge"><i data-lucide="${ic}"></i>${c.label}</div>
             </div>
-            <div class="status-badge">
-              <i data-lucide="${ic}"></i>
-              ${c.label}
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original}</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
             </div>
+            ${btn}
           </div>
-          <div class="card-meta">
-            <div class="card-meta-item">
-              <i data-lucide="activity"></i>
-              ${c.status_original}
-            </div>
-            <div class="card-meta-item">
-              <i data-lucide="clock"></i>
-              ${att}
-            </div>
-          </div>
-          ${descHtml}
-        </div>
-      `;
+        </div>`;
     }
 
     function render(dados) {
-      document.getElementById('ultimaAtt').textContent =
-        new Date(dados.timestamp).toLocaleTimeString('pt-BR');
-
+      document.getElementById('ultimaAtt').textContent = new Date(dados.timestamp).toLocaleTimeString('pt-BR');
       const { resumo, componentes, geral, incidentes = [] } = dados;
+      incidentesAtivos = incidentes;
 
       // Banner
       const banner = document.getElementById('banner');
@@ -379,41 +463,28 @@
       let cls = 'up', ic = 'check-circle', msg = 'Todos os sistemas operacionais';
       if (resumo.down > 0 || ind === 'critical' || ind === 'major') {
         cls = 'down'; ic = 'x-circle';
-        msg = resumo.down > 0 ? `${resumo.down} sistema(s) fora do ar` : 'Interrupção confirmada pela StatusPage';
+        msg = resumo.down > 0 ? `${resumo.down} sistema${resumo.down>1?'s':''} fora do ar` : 'Interrupção confirmada pela StatusPage';
       } else if (resumo.degraded > 0 || ind === 'minor' || ind === 'maintenance') {
         cls = 'degraded'; ic = 'alert-triangle';
-        msg = resumo.degraded > 0 ? `${resumo.degraded} sistema(s) com degradação detectada` : 'Degradação ou manutenção em andamento';
+        msg = resumo.degraded > 0 ? `${resumo.degraded} sistema${resumo.degraded>1?'s':''} com degradação detectada` : 'Degradação ou manutenção em andamento';
       }
       if (geral?.description && geral.description !== 'All Systems Operational') msg += ` — ${geral.description}`;
-      banner.className = 'banner ' + cls;
+      banner.className = 'hero-banner ' + cls;
       banner.innerHTML = `<i data-lucide="${ic}"></i><span>${msg}</span>`;
-
-      // Incidentes ativos
-      const incWrap = document.getElementById('incidentesWrap');
-      incWrap.innerHTML = incidentes.map(i => `
-        <div class="incidente-card">
-          <i data-lucide="alert-octagon"></i>
-          <div>
-            <div class="incidente-nome">${i.nome}</div>
-            <div class="incidente-meta">Status: ${i.status} · Impacto: ${i.impacto} · Atualizado: ${new Date(i.atualizado).toLocaleString('pt-BR')}</div>
-          </div>
-        </div>
-      `).join('');
 
       // Chips
       document.getElementById('chips').innerHTML = `
-        <div class="chip chip-up"><i data-lucide="check-circle"></i> OPERACIONAL: ${resumo.up}</div>
-        ${resumo.degraded > 0 ? `<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i> DEGRADAÇÃO: ${resumo.degraded}</div>` : ''}
-        ${resumo.down > 0     ? `<div class="chip chip-down"><i data-lucide="x-circle"></i> DOWN: ${resumo.down}</div>` : ''}
-        <div class="chip chip-total"><i data-lucide="layers"></i> Total: ${resumo.total}</div>
+        <div class="chip chip-up"><i data-lucide="check-circle"></i>OPERACIONAL: ${resumo.up}</div>
+        ${resumo.degraded>0?`<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i>DEGRADAÇÃO: ${resumo.degraded}</div>`:''}
+        ${resumo.down>0?`<div class="chip chip-down"><i data-lucide="x-circle"></i>DOWN: ${resumo.down}</div>`:''}
+        <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${resumo.total}</div>
       `;
 
-      // Separa por grupo
       const apis   = componentes.filter(c => !c.grupo);
       const bancos = componentes.filter(c =>  c.grupo);
 
-      document.getElementById('count-apis').textContent   = `${apis.length} componente${apis.length !== 1 ? 's' : ''}`;
-      document.getElementById('count-bancos').textContent = `${bancos.length} banco${bancos.length !== 1 ? 's' : ''}`;
+      document.getElementById('count-apis').textContent   = `${apis.length} componente${apis.length!==1?'s':''}`;
+      document.getElementById('count-bancos').textContent = `${bancos.length} instituiç${bancos.length!==1?'ões':'ão'}`;
 
       document.getElementById('grid-apis').innerHTML   = apis.length   ? apis.map(criarCard).join('')   : '<div class="loading-grid">Nenhum dado</div>';
       document.getElementById('grid-bancos').innerHTML = bancos.length ? bancos.map(criarCard).join('') : '<div class="loading-grid">Nenhum dado</div>';
@@ -421,9 +492,48 @@
       lucide.createIcons();
     }
 
+    // Modal
+    function abrirModal(id) {
+      const inc = incidentesAtivos.find(i => i.id === id);
+      if (!inc) return;
+
+      const deg = inc.impacto === 'minor' || inc.impacto === 'maintenance';
+      document.getElementById('modalBar').className = 'modal-top-bar' + (deg ? ' degraded' : '');
+      document.getElementById('modalTitulo').textContent = inc.nome;
+      document.getElementById('modalSub').textContent = `Atualizado em ${fmt(inc.atualizado)}`;
+
+      const impMap = { none:'pill-muted|Nenhum', minor:'pill-yellow|Menor', major:'pill-red|Grave', critical:'pill-red|Crítico', maintenance:'pill-yellow|Manutenção' };
+      const [impCls, impLbl] = (impMap[inc.impacto]||'pill-muted|'+inc.impacto).split('|');
+      const stMap  = { investigating:'pill-red', identified:'pill-yellow', monitoring:'pill-yellow', resolved:'pill-green' };
+      const stCls  = stMap[inc.status] || 'pill-muted';
+
+      document.getElementById('modalPills').innerHTML = `
+        <span class="modal-pill ${impCls}"><i data-lucide="alert-triangle"></i>${impLbl}</span>
+        <span class="modal-pill ${stCls}"><i data-lucide="circle"></i>${inc.status}</span>
+        ${inc.url?`<a href="${inc.url}" target="_blank" class="modal-pill pill-muted"><i data-lucide="external-link"></i>StatusPage</a>`:''}
+      `;
+
+      const ups = inc.updates || [];
+      document.getElementById('modalUpdates').innerHTML = ups.length
+        ? ups.map(u => `
+            <div class="update-item ${u.status==='resolved'?'resolved':u.status==='investigating'?'investigating':''}">
+              <div class="update-status">${u.status}</div>
+              <div class="update-body">${u.body||'—'}</div>
+              <div class="update-time">${fmt(u.updated_at)}</div>
+            </div>`).join('')
+        : `<div class="modal-no-updates">Nenhuma atualização registrada para este incidente.</div>`;
+
+      document.getElementById('modalOverlay').classList.add('open');
+      lucide.createIcons();
+    }
+
+    function fecharModalBtn() { document.getElementById('modalOverlay').classList.remove('open'); }
+    function fecharModal(e) { if (e.target === document.getElementById('modalOverlay')) fecharModalBtn(); }
+    document.addEventListener('keydown', e => { if (e.key==='Escape') fecharModalBtn(); });
+
     setTimeout(() => {
       conectarWS();
-      fetch('/api/status').then(r => r.json()).then(d => { if (d?.componentes) render(d); }).catch(() => {});
+      fetch('/api/status').then(r=>r.json()).then(d=>{ if(d?.componentes) render(d); }).catch(()=>{});
     }, 300);
   </script>
 </body>
