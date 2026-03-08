@@ -21,6 +21,26 @@ const STATUSPAGE_URL = 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.
 const IGNORADOS = ['RTM', 'JD'];
 
 // ─────────────────────────────────────────────
+// CONFIGURAÇÃO DE ALERTAS
+// ─────────────────────────────────────────────
+
+// Slack — webhook fixo + usuários a mencionar
+const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
+const SLACK_MENTIONS = ['U09G386SN01', 'U09BNJL6E2X', 'U09QSBQ7SEP'];
+
+// Email (opcional — configure as variáveis no Render se quiser ativar futuramente)
+const ALERT_EMAIL_TO  = process.env.ALERT_EMAIL_TO     || null;
+const ALERT_EMAIL_FROM= process.env.ALERT_EMAIL_FROM   || null;
+const SMTP_HOST       = process.env.SMTP_HOST          || null;
+const SMTP_PORT       = parseInt(process.env.SMTP_PORT || '587');
+const SMTP_USER       = process.env.SMTP_USER          || null;
+const SMTP_PASS       = process.env.SMTP_PASS          || null;
+
+// Mapa de estado anterior por componente { [id]: 'UP' | 'DEGRADED' | 'DOWN' }
+// Evita alertas repetidos — só notifica quando o status MUDA
+const estadoAnterior = {};
+
+// ─────────────────────────────────────────────
 // ESTADO GLOBAL
 // ─────────────────────────────────────────────
 
@@ -85,7 +105,7 @@ function labelStatus(status) {
 
 // ─────────────────────────────────────────────
 // SEPARAR COMPONENTES
-// group: true  → grupo pai (ex: "Brazilian Banks") — ignorar
+// group: true  → grupo pai — ignorar
 // group: false → componente real — exibir (exceto IGNORADOS)
 // ─────────────────────────────────────────────
 
@@ -117,6 +137,213 @@ function separarComponentes(rawComponents) {
 }
 
 // ─────────────────────────────────────────────
+// ALERTAS
+// ─────────────────────────────────────────────
+
+const EMOJI = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
+const LABEL = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
+
+async function enviarSlack(componente, statusNovo, statusAnterior) {
+  const emoji     = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
+  const label     = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
+  const cor       = { DOWN: '#ff4d4d', DEGRADED: '#f5c842', UP: '#1fd97a' };
+
+  const isRecovery  = statusNovo === 'UP';
+  const horaAgora   = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dataAgora   = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const grupo       = componente.grupo || 'APIs & Infraestrutura';
+  const mencoes     = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
+
+  const titulo = isRecovery
+    ? `${emoji.UP} Serviço Recuperado — ${componente.nome}`
+    : statusNovo === 'DOWN'
+      ? `${emoji.DOWN} ALERTA CRÍTICO — ${componente.nome} está FORA DO AR`
+      : `${emoji.DEGRADED} ALERTA — ${componente.nome} com DEGRADAÇÃO`;
+
+  const payload = {
+    text: mencoes, // garante que a menção aparece como notificação push
+    blocks: [
+      // Cabeçalho
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: titulo, emoji: true }
+      },
+      // Menções + chamada de atenção
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: isRecovery
+            ? `${mencoes} — O serviço voltou ao normal. ✅`
+            : `${mencoes} — Atenção! Problema detectado no monitoramento Pix Health.`
+        }
+      },
+      { type: 'divider' },
+      // Detalhes do incidente
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*🏦 Componente:*
+\`${componente.nome}\``
+          },
+          {
+            type: 'mrkdwn',
+            text: `*📂 Grupo:*
+${grupo}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*⚠️ Problema:*
+${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*📡 Status técnico:*
+\`${componente.status_original || statusNovo.toLowerCase()}\``
+          },
+          {
+            type: 'mrkdwn',
+            text: `*📅 Data:*
+${dataAgora}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*🕐 Hora:*
+${horaAgora}`
+          }
+        ]
+      },
+      { type: 'divider' },
+      // Rodapé
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Pix Health Monitor · Okto Payments StatusPage · Detectado às ${horaAgora} de ${dataAgora}`
+          }
+        ]
+      }
+    ]
+  };
+
+  try {
+    await axios.post(SLACK_WEBHOOK, payload, { timeout: 8000 });
+    console.log(`[Slack] Alerta enviado: ${componente.nome} | ${label[statusAnterior]} → ${label[statusNovo]}`);
+  } catch (e) {
+    console.error('[Slack] Erro ao enviar alerta:', e.message);
+  }
+}
+
+
+async function enviarEmail(componente, statusNovo, statusAnterior) {
+  if (!ALERT_EMAIL_TO || !SMTP_HOST || !SMTP_USER || !SMTP_PASS) return;
+
+  // Nodemailer é carregado dinamicamente para não quebrar se não estiver instalado
+  let nodemailer;
+  try { nodemailer = require('nodemailer'); }
+  catch (e) {
+    console.warn('[Email] nodemailer não instalado. Rode: npm install nodemailer');
+    return;
+  }
+
+  const label     = LABEL[statusNovo]     || statusNovo;
+  const labelAnt  = LABEL[statusAnterior] || statusAnterior;
+  const hora      = new Date().toLocaleString('pt-BR');
+  const isRecovery = statusNovo === 'UP';
+  const cor       = statusNovo === 'DOWN' ? '#ff4d4d' : statusNovo === 'DEGRADED' ? '#f5c842' : '#1fd97a';
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
+  });
+
+  const html = `
+    <div style="font-family:Inter,Arial,sans-serif;background:#0f0f13;padding:32px;border-radius:12px;max-width:520px;margin:0 auto">
+      <div style="border-left:4px solid ${cor};padding-left:16px;margin-bottom:24px">
+        <p style="color:#a0a0b0;font-size:11px;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px">
+          Pix Health Monitor
+        </p>
+        <h2 style="color:#f0f0f5;margin:0;font-size:20px">
+          ${isRecovery ? '✅ Serviço recuperado' : statusNovo === 'DOWN' ? '🔴 Serviço fora do ar' : '🟡 Degradação detectada'}
+        </h2>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse">
+        <tr>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20;width:40%">Componente</td>
+          <td style="padding:10px 0;color:#f0f0f5;font-size:14px;font-weight:600;border-bottom:1px solid #1a1a20">${componente.nome}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Grupo</td>
+          <td style="padding:10px 0;color:#f0f0f5;font-size:14px;border-bottom:1px solid #1a1a20">${componente.grupo || 'APIs & Infra'}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Mudança</td>
+          <td style="padding:10px 0;font-size:14px;border-bottom:1px solid #1a1a20">
+            <span style="color:#a0a0b0">${labelAnt}</span>
+            <span style="color:#4a4a5a"> → </span>
+            <span style="color:${cor};font-weight:700">${label}</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px">Horário</td>
+          <td style="padding:10px 0;color:#a0a0b0;font-size:13px;font-family:monospace">${hora}</td>
+        </tr>
+      </table>
+
+      <p style="color:#4a4a5a;font-size:11px;margin-top:24px;text-align:center">
+        Pix Health Monitor · Okto Payments StatusPage
+      </p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from:    `"Pix Health Monitor" <${ALERT_EMAIL_FROM || SMTP_USER}>`,
+      to:      ALERT_EMAIL_TO,
+      subject: `${isRecovery ? '✅ Recuperado' : statusNovo === 'DOWN' ? '🔴 DOWN' : '🟡 Degradação'} — ${componente.nome}`,
+      html
+    });
+    console.log(`[Email] Alerta enviado para ${ALERT_EMAIL_TO}: ${componente.nome} → ${label}`);
+  } catch (e) {
+    console.error('[Email] Erro ao enviar:', e.message);
+  }
+}
+
+// Verifica mudanças de estado e dispara alertas
+async function verificarAlertas(componentes) {
+  for (const c of componentes) {
+    const anterior = estadoAnterior[c.id];
+
+    // Primeira execução: apenas registra o estado, não alerta
+    if (anterior === undefined) {
+      estadoAnterior[c.id] = c.status;
+      continue;
+    }
+
+    // Mudança de estado detectada
+    if (anterior !== c.status) {
+      const deveAlertar = c.status !== 'UP' || anterior !== 'UP'; // alerta na ida E na volta
+      console.log(`[Alerta] ${c.nome}: ${anterior} → ${c.status}`);
+
+      if (deveAlertar) {
+        await Promise.allSettled([
+          enviarSlack(c, c.status, anterior),
+          enviarEmail(c, c.status, anterior)
+        ]);
+      }
+
+      estadoAnterior[c.id] = c.status;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
 // CONSULTAR STATUSPAGE
 // ─────────────────────────────────────────────
 
@@ -130,7 +357,6 @@ async function consultarStatusPage() {
     const componentes = separarComponentes(data.components || []);
     const geral       = data.status || {};
 
-    // Incidentes ativos — inclui histórico de atualizações para o modal
     const incidentes = (data.incidents || []).map(i => ({
       id:         i.id,
       nome:       i.name,
@@ -224,6 +450,9 @@ async function monitorar() {
     console.log('[Sistema] Resetando histórico (meia-noite)');
     historicoDia = [];
   }
+
+  // Verifica mudanças e dispara alertas
+  await verificarAlertas(componentes);
 
   const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
   clientesConectados.forEach(c => {
@@ -385,6 +614,8 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log(`StatusPage: ${STATUSPAGE_URL}`);
   console.log(`Intervalo:  ${INTERVALO_SEGUNDOS}s`);
   console.log(`Ignorados:  ${IGNORADOS.join(' | ')}`);
+  console.log(`Slack:      ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
+  console.log(`Email:      ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
   console.log('='.repeat(60) + '\n');
 
   iniciarKeepAlive();
