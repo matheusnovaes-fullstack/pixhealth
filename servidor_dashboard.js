@@ -350,7 +350,7 @@ async function verificarAlertas(componentes) {
 async function consultarStatusPage() {
   try {
     const inicio   = Date.now();
-    const response = await axios.get(STATUSPAGE_URL, { timeout: 10000 });
+    const response = await axios.get(STATUSPAGE_URL, { timeout: 30000 });
     const latencia = Date.now() - inicio;
     const data     = response.data;
 
