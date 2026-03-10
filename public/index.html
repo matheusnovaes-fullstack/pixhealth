@@ -33,6 +33,9 @@
       --red-bd:      #3a0e0e;
       --red-glow:    rgba(255,77,77,0.12);
       --blue:        #5b9ef7;
+      --purple:      #a78bfa;
+      --purple-dim:  #120d2a;
+      --purple-bd:   #2d1f5e;
       --mono:        'JetBrains Mono', monospace;
     }
 
@@ -40,17 +43,14 @@
 
     body {
       font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
     }
 
     /* ─── TOPBAR ─── */
     .topbar {
       position: sticky; top: 0; z-index: 200;
-      background: rgba(6,6,8,0.95);
-      backdrop-filter: blur(20px);
+      background: rgba(6,6,8,0.95); backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       padding: 0 36px; height: 58px;
       display: flex; align-items: center; justify-content: space-between;
@@ -62,8 +62,8 @@
       display: flex; align-items: center; justify-content: center;
     }
     .logo-icon svg { width: 15px; height: 15px; color: var(--green); }
-    .logo-name { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
-    .logo-tag {
+    .logo-name  { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
+    .logo-tag   {
       font-size: 10px; font-weight: 600; color: var(--muted);
       background: var(--surface2); border: 1px solid var(--border-md);
       padding: 2px 8px; border-radius: 4px; letter-spacing: 0.4px;
@@ -85,8 +85,7 @@
     .ws-pill.ok .ws-dot { background: var(--green); animation: blink 2s infinite; }
     .btn-nav {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 14px; border-radius: 6px;
-      font-size: 12px; font-weight: 600;
+      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
       background: var(--surface2); border: 1px solid var(--border-md);
       color: var(--text-2); text-decoration: none; transition: all 0.2s;
     }
@@ -107,10 +106,7 @@
     .hero-banner.up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
     .hero-banner.degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
     .hero-banner.down     { background: var(--red-dim); border-color: var(--red-bd); color: var(--red); animation: pulse-banner 2s infinite; }
-    @keyframes pulse-banner {
-      0%,100% { box-shadow: none; }
-      50%     { box-shadow: 0 0 28px var(--red-glow); }
-    }
+    @keyframes pulse-banner { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 28px var(--red-glow); } }
     .hero-meta {
       display: flex; flex-direction: column; align-items: flex-end;
       justify-content: center; gap: 3px; padding: 16px 20px;
@@ -118,7 +114,7 @@
       min-width: 170px;
     }
     .hero-meta-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
-    .hero-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text-2); }
+    .hero-meta-val   { font-family: var(--mono); font-size: 13px; color: var(--text-2); }
 
     /* ─── CHIPS ─── */
     .resumo-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; margin-top: 10px; }
@@ -129,10 +125,10 @@
       letter-spacing: 0.4px; font-family: var(--mono);
     }
     .chip svg { width: 10px; height: 10px; }
-    .chip-up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
+    .chip-up       { background: var(--green-dim);  border-color: var(--green-bd);  color: var(--green); }
     .chip-degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
-    .chip-down     { background: var(--red-dim); border-color: var(--red-bd); color: var(--red); }
-    .chip-total    { background: var(--surface); border-color: var(--border-md); color: var(--muted); }
+    .chip-down     { background: var(--red-dim);    border-color: var(--red-bd);    color: var(--red); }
+    .chip-total    { background: var(--surface);    border-color: var(--border-md); color: var(--muted); }
 
     /* ─── SEÇÃO ─── */
     .section { margin-bottom: 36px; }
@@ -152,7 +148,7 @@
     /* ─── GRID ─── */
     .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
 
-    /* ─── CARD ─── */
+    /* ─── CARD BASE ─── */
     .comp-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; overflow: hidden;
@@ -162,30 +158,22 @@
     .card-accent { height: 3px; }
     .comp-card.up       .card-accent { background: var(--green-bd); }
     .comp-card.degraded .card-accent { background: var(--yellow); animation: bar-blink 2s infinite; }
-    .comp-card.down     .card-accent { background: var(--red); animation: bar-blink 1.5s infinite; }
+    .comp-card.down     .card-accent { background: var(--red);    animation: bar-blink 1.5s infinite; }
     @keyframes bar-blink { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
-
     .comp-card.up       { border-color: var(--green-bd); }
     .comp-card.degraded { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
-    .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red   2s infinite; }
-
-    @keyframes pulse-red {
-      0%,100% { border-color: var(--red-bd); box-shadow: none; }
-      50%     { border-color: var(--red); box-shadow: 0 0 16px var(--red-glow); }
-    }
-    @keyframes pulse-yellow {
-      0%,100% { border-color: var(--yellow-bd); box-shadow: none; }
-      50%     { border-color: var(--yellow); box-shadow: 0 0 16px var(--yellow-glow); }
-    }
-    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
+    .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red    2s infinite; }
+    @keyframes pulse-red    { 0%,100% { border-color:var(--red-bd);    box-shadow:none; } 50% { border-color:var(--red);    box-shadow:0 0 16px var(--red-glow); } }
+    @keyframes pulse-yellow { 0%,100% { border-color:var(--yellow-bd); box-shadow:none; } 50% { border-color:var(--yellow); box-shadow:0 0 16px var(--yellow-glow); } }
+    @keyframes blink        { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
 
     .card-body { padding: 16px 18px 18px; }
-    .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-top  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
     .card-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .comp-card.up       .card-dot { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+    .card-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .comp-card.up       .card-dot { background: var(--green);  box-shadow: 0 0 6px var(--green-glow); }
     .comp-card.degraded .card-dot { background: var(--yellow); animation: blink 2s infinite; }
-    .comp-card.down     .card-dot { background: var(--red); animation: blink 1.5s infinite; }
+    .comp-card.down     .card-dot { background: var(--red);    animation: blink 1.5s infinite; }
     .card-nome {
       font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -197,15 +185,53 @@
       text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid;
     }
     .status-badge svg { width: 9px; height: 9px; }
-    .comp-card.up       .status-badge { background: var(--green-dim); color: var(--green); border-color: var(--green-bd); }
+    .comp-card.up       .status-badge { background: var(--green-dim);  color: var(--green);  border-color: var(--green-bd); }
     .comp-card.degraded .status-badge { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
-    .comp-card.down     .status-badge { background: var(--red-dim); color: var(--red); border-color: var(--red-bd); }
+    .comp-card.down     .status-badge { background: var(--red-dim);    color: var(--red);    border-color: var(--red-bd); }
     .card-divider { height: 1px; background: var(--border); margin-bottom: 12px; }
     .card-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
     .card-meta-item { display: flex; align-items: center; gap: 4px; font-family: var(--mono); }
     .card-meta-item svg { width: 10px; height: 10px; }
 
-    /* Botão incidente — oculto por padrão, aparece só quando há incidente */
+    /* ─── KYC: área extra do card ─── */
+    .kyc-ok {
+      margin-top: 10px; padding: 8px 12px; border-radius: 7px;
+      font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px;
+      background: var(--green-dim); border: 1px solid var(--green-bd); color: var(--green);
+    }
+    .kyc-ok svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .kyc-warn {
+      margin-top: 10px; padding: 8px 12px; border-radius: 7px;
+      font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px;
+      background: var(--yellow-dim); border: 1px solid var(--yellow-bd); color: var(--yellow);
+    }
+    .kyc-warn svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+    .kyc-detalhes { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .kyc-det-label {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      display: flex; align-items: center; gap: 5px; margin-bottom: 2px;
+    }
+    .kyc-det-label svg { width: 10px; height: 10px; }
+    .kyc-det-item {
+      background: var(--bg2); border-radius: 7px; padding: 9px 12px;
+      border-left: 2px solid var(--border-md);
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .kyc-det-item.det-down     { border-left-color: var(--red); }
+    .kyc-det-item.det-degraded { border-left-color: var(--yellow); }
+    .kyc-det-row   { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .kyc-det-nome  { font-size: 12px; font-weight: 600; color: var(--text); }
+    .kyc-det-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .kyc-det-badge.down     { background: var(--red-dim);    color: var(--red);    border: 1px solid var(--red-bd); }
+    .kyc-det-badge.degraded { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow-bd); }
+    .kyc-det-motivo { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    /* ─── BOTÃO INCIDENTE (Okto) ─── */
     .btn-incidente {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       margin-top: 13px; padding: 8px 14px; border-radius: 7px;
@@ -216,7 +242,7 @@
     .btn-incidente svg { width: 12px; height: 12px; }
     .comp-card.degraded .btn-incidente { color: var(--yellow); border-color: var(--yellow-bd); }
     .comp-card.degraded .btn-incidente:hover { background: var(--yellow-dim); }
-    .comp-card.down     .btn-incidente { color: var(--red); border-color: var(--red-bd); }
+    .comp-card.down     .btn-incidente { color: var(--red);    border-color: var(--red-bd); }
     .comp-card.down     .btn-incidente:hover { background: var(--red-dim); }
 
     /* ─── MODAL ─── */
@@ -227,24 +253,20 @@
     }
     .modal-overlay.open { display: flex; animation: fadeIn 0.15s; }
     @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-
     .modal {
       background: var(--surface2); border: 1px solid var(--border-hi);
       border-radius: 14px; width: 100%; max-width: 580px;
       max-height: 82vh; overflow-y: auto; margin: 20px;
       animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1);
     }
-    @keyframes slideUp {
-      from { transform: translateY(18px) scale(0.98); opacity:0; }
-      to   { transform: translateY(0)    scale(1);    opacity:1; }
-    }
+    @keyframes slideUp { from { transform:translateY(18px) scale(0.98); opacity:0; } to { transform:translateY(0) scale(1); opacity:1; } }
     .modal-top-bar { height: 3px; background: var(--red); border-radius: 14px 14px 0 0; }
     .modal-top-bar.degraded { background: var(--yellow); }
-    .modal-inner { padding: 24px 28px 28px; }
-    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-    .modal-titulo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
-    .modal-sub { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
-    .modal-fechar {
+    .modal-inner   { padding: 24px 28px 28px; }
+    .modal-header  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+    .modal-titulo  { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .modal-sub     { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+    .modal-fechar  {
       background: var(--surface); border: 1px solid var(--border-md);
       color: var(--muted); cursor: pointer; padding: 6px; border-radius: 7px;
       display: flex; align-items: center; transition: all 0.2s; flex-shrink: 0;
@@ -256,8 +278,7 @@
       display: inline-flex; align-items: center; gap: 5px;
       padding: 4px 12px; border-radius: 5px;
       font-size: 10px; font-weight: 700; border: 1px solid;
-      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.4px;
-      text-decoration: none;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.4px; text-decoration: none;
     }
     .modal-pill svg { width: 10px; height: 10px; }
     .pill-red    { background: var(--red-dim);    color: var(--red);    border-color: var(--red-bd); }
@@ -275,18 +296,16 @@
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: 9px; padding: 13px 15px; border-left: 2px solid var(--yellow);
     }
-    .update-item.resolved     { border-left-color: var(--green); }
-    .update-item.investigating{ border-left-color: var(--red); }
+    .update-item.resolved      { border-left-color: var(--green); }
+    .update-item.investigating { border-left-color: var(--red); }
     .update-status { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; font-family: var(--mono); }
     .update-body   { font-size: 12px; color: var(--text-2); line-height: 1.65; }
     .update-time   { font-size: 10px; color: var(--muted); margin-top: 7px; font-family: var(--mono); }
     .modal-no-updates {
       background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 9px; padding: 16px; text-align: center;
-      font-size: 12px; color: var(--muted);
+      border-radius: 9px; padding: 16px; text-align: center; font-size: 12px; color: var(--muted);
     }
 
-    /* ─── MISC ─── */
     .loading-grid { grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--muted); font-size: 13px; }
 
     @media (max-width: 768px) {
@@ -334,6 +353,7 @@
 
     <div class="resumo-chips" id="chips"></div>
 
+    <!-- APIs & Infra: 3 KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit) -->
     <div class="section">
       <div class="section-header">
         <div class="section-icon"><i data-lucide="zap"></i></div>
@@ -345,6 +365,7 @@
       </div>
     </div>
 
+    <!-- Instituições: 10 bancos da Okto (têm grupo) -->
     <div class="section">
       <div class="section-header">
         <div class="section-icon"><i data-lucide="landmark"></i></div>
@@ -358,7 +379,7 @@
 
   </div>
 
-  <!-- MODAL -->
+  <!-- MODAL incidente -->
   <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
     <div class="modal">
       <div class="modal-top-bar" id="modalBar"></div>
@@ -366,11 +387,9 @@
         <div class="modal-header">
           <div>
             <div class="modal-titulo" id="modalTitulo">—</div>
-            <div class="modal-sub" id="modalSub">—</div>
+            <div class="modal-sub"    id="modalSub">—</div>
           </div>
-          <button class="modal-fechar" onclick="fecharModalBtn()">
-            <i data-lucide="x"></i>
-          </button>
+          <button class="modal-fechar" onclick="fecharModalBtn()"><i data-lucide="x"></i></button>
         </div>
         <div class="modal-pills" id="modalPills"></div>
         <div class="modal-section-label"><i data-lucide="list"></i> Atualizações do Incidente</div>
@@ -382,7 +401,6 @@
   <script>
     lucide.createIcons();
 
-    // Relógio ao vivo
     function tick() { document.getElementById('relogio').textContent = new Date().toLocaleTimeString('pt-BR'); }
     tick(); setInterval(tick, 1000);
 
@@ -407,44 +425,36 @@
       };
     }
 
-    function icone(s) { return s==='UP'?'check-circle':s==='DEGRADED'?'alert-triangle':'x-circle'; }
-
+    function icone(s) { return s === 'UP' ? 'check-circle' : s === 'DEGRADED' ? 'alert-triangle' : 'x-circle'; }
     function fmt(iso) {
       if (!iso) return '—';
-      return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
-    function criarCard(c) {
-      const ic  = icone(c.status);
+    // ── Card individual Okto ──
+    function criarCardOkto(c) {
       const att = fmt(c.atualizado_em);
-
       const inc = c.status !== 'UP'
-        ? incidentesAtivos.find(i =>
-            i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
-            c.nome.toLowerCase().includes(i.nome.toLowerCase())
-          ) || (incidentesAtivos.length === 1 ? incidentesAtivos[0] : null)
+        ? incidentesAtivos.find(i => i.provedor === c.provedor &&
+            (i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
+             c.nome.toLowerCase().includes(i.nome.toLowerCase())))
+          || (incidentesAtivos.filter(i => i.provedor === c.provedor).length === 1
+              ? incidentesAtivos.find(i => i.provedor === c.provedor) : null)
         : null;
-
       const btn = inc
-        ? `<button class="btn-incidente" onclick="abrirModal('${inc.id}')">
-             <i data-lucide="file-text"></i> Log do Incidente
-           </button>`
+        ? `<button class="btn-incidente" onclick="abrirModal('${inc.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
         : '';
-
       return `
         <div class="comp-card ${c.status.toLowerCase()}">
           <div class="card-accent"></div>
           <div class="card-body">
             <div class="card-top">
-              <div class="card-left">
-                <div class="card-dot"></div>
-                <span class="card-nome">${c.nome}</span>
-              </div>
-              <div class="status-badge"><i data-lucide="${ic}"></i>${c.label}</div>
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
             </div>
             <div class="card-divider"></div>
             <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original}</div>
+              <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original || c.status.toLowerCase()}</div>
               <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
             </div>
             ${btn}
@@ -452,14 +462,71 @@
         </div>`;
     }
 
+    // ── Card KYC agregado: SEMPRE 1 por processadora ──
+    // UP           → mensagem verde simples
+    // DEGRADED/DOWN → lista os serviços afetados com nome + motivo
+    function criarCardKYC(c) {
+      const att = fmt(c.atualizado_em);
+      let extra = '';
+
+      if (c.status === 'UP') {
+        extra = `<div class="kyc-ok"><i data-lucide="check-circle"></i>${c.mensagem || 'Todos os serviços operacionais'}</div>`;
+      } else if (c.detalhes && c.detalhes.length > 0) {
+        const itens = c.detalhes.map(d => {
+          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
+          return `
+            <div class="kyc-det-item ${cls}">
+              <div class="kyc-det-row">
+                <span class="kyc-det-nome">${d.nome}</span>
+                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
+              </div>
+              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
+            </div>`;
+        }).join('');
+        extra = `
+          <div class="kyc-detalhes">
+            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+            ${itens}
+          </div>`;
+      } else {
+        extra = `<div class="kyc-warn"><i data-lucide="alert-triangle"></i>${c.mensagem || 'Instabilidade detectada'}</div>`;
+      }
+
+      return `
+        <div class="comp-card ${c.status.toLowerCase()}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="shield-check"></i>Processadora KYC</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+            </div>
+            ${extra}
+          </div>
+        </div>`;
+    }
+
+    function criarCard(c) {
+      return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
+    }
+
     function render(dados) {
       document.getElementById('ultimaAtt').textContent = new Date(dados.timestamp).toLocaleTimeString('pt-BR');
-      const { resumo, componentes, geral, incidentes = [] } = dados;
+      const { resumo, geral, incidentes = [] } = dados;
       incidentesAtivos = incidentes;
+
+      // ── FONTE DE VERDADE: componentes_dashboard ──
+      // Contém exatamente os cards da tela — nunca mais, nunca menos
+      const dashboard = dados.componentes_dashboard || dados.componentes || [];
 
       // Banner
       const banner = document.getElementById('banner');
-      const ind = geral?.indicator || 'none';
+      const ind    = geral?.indicator || 'none';
       let cls = 'up', ic = 'check-circle', msg = 'Todos os sistemas operacionais';
       if (resumo.down > 0 || ind === 'critical' || ind === 'major') {
         cls = 'down'; ic = 'x-circle';
@@ -468,20 +535,25 @@
         cls = 'degraded'; ic = 'alert-triangle';
         msg = resumo.degraded > 0 ? `${resumo.degraded} sistema${resumo.degraded>1?'s':''} com degradação detectada` : 'Degradação ou manutenção em andamento';
       }
-      if (geral?.description && geral.description !== 'All Systems Operational') msg += ` — ${geral.description}`;
       banner.className = 'hero-banner ' + cls;
       banner.innerHTML = `<i data-lucide="${ic}"></i><span>${msg}</span>`;
 
-      // Chips
+      // Chips — conta pelos cards do dashboard (não pelos componentes internos)
+      const dUp  = dashboard.filter(c => c.status === 'UP').length;
+      const dDeg = dashboard.filter(c => c.status === 'DEGRADED').length;
+      const dDwn = dashboard.filter(c => c.status === 'DOWN').length;
       document.getElementById('chips').innerHTML = `
-        <div class="chip chip-up"><i data-lucide="check-circle"></i>OPERACIONAL: ${resumo.up}</div>
-        ${resumo.degraded>0?`<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i>DEGRADAÇÃO: ${resumo.degraded}</div>`:''}
-        ${resumo.down>0?`<div class="chip chip-down"><i data-lucide="x-circle"></i>DOWN: ${resumo.down}</div>`:''}
-        <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${resumo.total}</div>
+        <div class="chip chip-up"><i data-lucide="check-circle"></i>OPERACIONAL: ${dUp}</div>
+        ${dDeg > 0 ? `<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i>DEGRADAÇÃO: ${dDeg}</div>` : ''}
+        ${dDwn > 0 ? `<div class="chip chip-down"><i data-lucide="x-circle"></i>DOWN: ${dDwn}</div>` : ''}
+        <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${dashboard.length}</div>
       `;
 
-      const apis   = componentes.filter(c => !c.grupo);
-      const bancos = componentes.filter(c =>  c.grupo);
+      // ── Separação das seções ──
+      // APIs & Infra → KYC (agregado) + Okto sem grupo (Central Bank, API Deposits, API Withdrawals)
+      // Instituições → Okto com grupo (Bradesco, Itaú, Nubank, etc.)
+      const apis   = dashboard.filter(c => c.agregado || (c.categoria === 'pagamentos' && !c.grupo));
+      const bancos = dashboard.filter(c => c.categoria === 'pagamentos' && c.grupo);
 
       document.getElementById('count-apis').textContent   = `${apis.length} componente${apis.length!==1?'s':''}`;
       document.getElementById('count-bancos').textContent = `${bancos.length} instituiç${bancos.length!==1?'ões':'ão'}`;
@@ -492,27 +564,22 @@
       lucide.createIcons();
     }
 
-    // Modal
+    // Modal de incidente
     function abrirModal(id) {
       const inc = incidentesAtivos.find(i => i.id === id);
       if (!inc) return;
-
       const deg = inc.impacto === 'minor' || inc.impacto === 'maintenance';
-      document.getElementById('modalBar').className = 'modal-top-bar' + (deg ? ' degraded' : '');
+      document.getElementById('modalBar').className    = 'modal-top-bar' + (deg ? ' degraded' : '');
       document.getElementById('modalTitulo').textContent = inc.nome;
-      document.getElementById('modalSub').textContent = `Atualizado em ${fmt(inc.atualizado)}`;
-
+      document.getElementById('modalSub').textContent    = `Atualizado em ${fmt(inc.atualizado)}`;
       const impMap = { none:'pill-muted|Nenhum', minor:'pill-yellow|Menor', major:'pill-red|Grave', critical:'pill-red|Crítico', maintenance:'pill-yellow|Manutenção' };
-      const [impCls, impLbl] = (impMap[inc.impacto]||'pill-muted|'+inc.impacto).split('|');
-      const stMap  = { investigating:'pill-red', identified:'pill-yellow', monitoring:'pill-yellow', resolved:'pill-green' };
-      const stCls  = stMap[inc.status] || 'pill-muted';
-
+      const [impCls, impLbl] = (impMap[inc.impacto] || 'pill-muted|' + inc.impacto).split('|');
+      const stMap = { investigating:'pill-red', identified:'pill-yellow', monitoring:'pill-yellow', resolved:'pill-green' };
       document.getElementById('modalPills').innerHTML = `
         <span class="modal-pill ${impCls}"><i data-lucide="alert-triangle"></i>${impLbl}</span>
-        <span class="modal-pill ${stCls}"><i data-lucide="circle"></i>${inc.status}</span>
-        ${inc.url?`<a href="${inc.url}" target="_blank" class="modal-pill pill-muted"><i data-lucide="external-link"></i>StatusPage</a>`:''}
+        <span class="modal-pill ${stMap[inc.status]||'pill-muted'}"><i data-lucide="circle"></i>${inc.status}</span>
+        ${inc.url ? `<a href="${inc.url}" target="_blank" class="modal-pill pill-muted"><i data-lucide="external-link"></i>StatusPage</a>` : ''}
       `;
-
       const ups = inc.updates || [];
       document.getElementById('modalUpdates').innerHTML = ups.length
         ? ups.map(u => `
@@ -522,18 +589,19 @@
               <div class="update-time">${fmt(u.updated_at)}</div>
             </div>`).join('')
         : `<div class="modal-no-updates">Nenhuma atualização registrada para este incidente.</div>`;
-
       document.getElementById('modalOverlay').classList.add('open');
       lucide.createIcons();
     }
 
     function fecharModalBtn() { document.getElementById('modalOverlay').classList.remove('open'); }
-    function fecharModal(e) { if (e.target === document.getElementById('modalOverlay')) fecharModalBtn(); }
-    document.addEventListener('keydown', e => { if (e.key==='Escape') fecharModalBtn(); });
+    function fecharModal(e)   { if (e.target === document.getElementById('modalOverlay')) fecharModalBtn(); }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModalBtn(); });
 
     setTimeout(() => {
       conectarWS();
-      fetch('/api/status').then(r=>r.json()).then(d=>{ if(d?.componentes) render(d); }).catch(()=>{});
+      fetch('/api/status').then(r => r.json()).then(d => {
+        if (d?.componentes_dashboard || d?.componentes) render(d);
+      }).catch(() => {});
     }, 300);
   </script>
 </body>
