@@ -27,25 +27,29 @@ const APIS_MONITORADAS = [
     nome: 'Okto Payments',
     url: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
     categoria: 'pagamentos',
-    agregado: false  // Exibe todos os componentes individuais (10 bancos + Central Bank + Withdraw/Deposit)
+    agregado: false,  // Exibe todos os componentes individuais (bancos + Central Bank + Withdraw/Deposit)
+    tipo: 'summary'   // Usa summary.json — retorna lista completa de componentes
   },
   {
     nome: 'Serasa',
     url: 'https://status.allowme.com.br/api/v2/summary.json',
     categoria: 'kyc',
-    agregado: true   // Exibe apenas 1 card resumido; mostra detalhes só se houver problema
+    agregado: true,   // 1 card único; detalha serviços afetados apenas se houver problema
+    tipo: 'summary'   // summary.json retorna components[] — podemos extrair detalhes do que degradou/caiu
   },
   {
     nome: 'Legitimuz',
     url: 'https://legitimuz.statuspage.io/api/v2/summary.json',
     categoria: 'kyc',
-    agregado: true
+    agregado: true,
+    tipo: 'summary'
   },
   {
     nome: 'Unico',
     url: 'https://status.unico.io/api/v2/summary.json',
     categoria: 'kyc',
-    agregado: true
+    agregado: true,
+    tipo: 'summary'
   }
 ];
 
@@ -172,8 +176,13 @@ function separarComponentes(rawComponents, provedor, categoria) {
 // ─────────────────────────────────────────────
 // CRIAR CARD AGREGADO (1 card por processadora KYC)
 // ─────────────────────────────────────────────
-// Regra: se tudo UP → card verde sem detalhes
-//        se houver DEGRADED ou DOWN → card colorido COM detalhes dos serviços afetados
+// Regra:
+//   • Tudo UP  → card verde, sem detalhes
+//   • DEGRADED → card amarelo + lista de serviços afetados com nome e motivo
+//   • DOWN     → card vermelho + lista de serviços fora do ar com nome e motivo
+//
+// Os componentes vêm do summary.json (components[]) — temos nome, status e description
+// de cada serviço individual, o que permite apontar exatamente o que quebrou.
 
 function criarCardAgregado(provedor, componentes) {
   const total    = componentes.length;
@@ -181,39 +190,45 @@ function criarCardAgregado(provedor, componentes) {
   const degraded = componentes.filter(c => c.status === 'DEGRADED').length;
   const down     = componentes.filter(c => c.status === 'DOWN').length;
 
-  let statusGeral = 'UP';
-  let mensagem    = 'Todos os serviços operacionais';
-  let problemticos = [];
+  let statusGeral  = 'UP';
+  let mensagem     = 'Todos os serviços operacionais';
+  let problematicos = [];
 
   if (down > 0) {
-    statusGeral  = 'DOWN';
-    problemticos = componentes.filter(c => c.status === 'DOWN');
-    mensagem     = `${down} serviço${down > 1 ? 's' : ''} fora do ar`;
+    statusGeral   = 'DOWN';
+    // Inclui DOWN + DEGRADED nos detalhes quando há DOWN, para visão completa
+    problematicos = componentes.filter(c => c.status === 'DOWN' || c.status === 'DEGRADED');
+    const plural  = down > 1 ? 's' : '';
+    mensagem      = `${down} serviço${plural} fora do ar${degraded > 0 ? ` e ${degraded} com degradação` : ''}`;
   } else if (degraded > 0) {
-    statusGeral  = 'DEGRADED';
-    problemticos = componentes.filter(c => c.status === 'DEGRADED');
-    mensagem     = `${degraded} serviço${degraded > 1 ? 's' : ''} com degradação`;
+    statusGeral   = 'DEGRADED';
+    problematicos = componentes.filter(c => c.status === 'DEGRADED');
+    const plural  = degraded > 1 ? 's' : '';
+    mensagem      = `${degraded} serviço${plural} com degradação`;
   }
 
-  // Detalhes só aparecem quando há problema
-  const detalhes = problemticos.map(c => ({
+  // Detalhes: nome do serviço + status + motivo (description da statuspage)
+  // Array vazio quando tudo está UP — frontend não renderiza seção de detalhes
+  const detalhes = problematicos.map(c => ({
     nome:   c.nome,
-    status: c.label,
-    motivo: c.descricao || 'Sem detalhes disponíveis'
+    status: c.label,  // 'DEGRADAÇÃO' ou 'DOWN'
+    motivo: c.descricao && c.descricao.trim() !== ''
+              ? c.descricao
+              : `Instabilidade reportada na StatusPage (${c.status_original})`
   }));
 
   return {
-    id:           `agregado-${provedor}`,
-    nome:         provedor,
-    provedor:     provedor,
-    categoria:    'kyc',
-    status:       statusGeral,
-    label:        labelStatus(statusGeral),
+    id:            `agregado-${provedor}`,
+    nome:          provedor,
+    provedor:      provedor,
+    categoria:     'kyc',
+    status:        statusGeral,
+    label:         labelStatus(statusGeral),
     mensagem,
-    detalhes,          // Array vazio quando tudo está UP
-    resumo: { total, up, degraded, down },
+    detalhes,
+    resumo:        { total, up, degraded, down },
     atualizado_em: new Date().toISOString(),
-    agregado:     true
+    agregado:      true
   };
 }
 
@@ -731,8 +746,9 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log(`Intervalo : ${INTERVALO_SEGUNDOS}s | Timeout: ${TIMEOUT_MS / 1000}s | Retries: ${MAX_RETRIES}`);
   console.log(`\nAPIs Monitoradas:`);
   APIS_MONITORADAS.forEach(api => {
-    const tipo = api.agregado ? '[1 CARD AGREGADO]' : '[CARDS INDIVIDUAIS]';
-    console.log(`  • ${api.nome.padEnd(20)} ${tipo.padEnd(20)} ${api.categoria}`);
+    const tipo    = api.agregado ? '[1 CARD AGREGADO]' : '[CARDS INDIVIDUAIS]';
+    const endpoint = api.url.split('/').pop(); // ex: summary.json
+    console.log(`  • ${api.nome.padEnd(20)} ${tipo.padEnd(20)} ${api.categoria.padEnd(12)} ← ${endpoint}`);
   });
   console.log(`\nIgnorados : ${IGNORADOS.join(' | ')}`);
   console.log(`Slack     : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
