@@ -20,41 +20,42 @@ const RETRY_DELAY_MS     = 2000;
 
 // ─────────────────────────────────────────────
 // APIs MONITORADAS
+//
+// OKTO  → summary.json  → cards individuais (bancos + Central Bank + Withdraw/Deposit)
+// KYC   → status.json   → 1 card por processadora
+//          summary.json  → consultado automaticamente só quando status != operational
+//                          para identificar qual serviço específico degradou/caiu
 // ─────────────────────────────────────────────
 
-const APIS_MONITORADAS = [
+const OKTO_CONFIG = {
+  nome:       'Okto Payments',
+  urlSummary: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
+  categoria:  'pagamentos'
+};
+
+const KYC_CONFIGS = [
   {
-    nome: 'Okto Payments',
-    url: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
-    categoria: 'pagamentos',
-    agregado: false,  // Exibe todos os componentes individuais (bancos + Central Bank + Withdraw/Deposit)
-    tipo: 'summary'   // Usa summary.json — retorna lista completa de componentes
+    nome:       'Serasa',
+    urlStatus:  'https://status.allowme.com.br/api/v2/status.json',
+    urlSummary: 'https://status.allowme.com.br/api/v2/summary.json',
+    categoria:  'kyc'
   },
   {
-    nome: 'Serasa',
-    url: 'https://status.allowme.com.br/api/v2/summary.json',
-    categoria: 'kyc',
-    agregado: true,   // 1 card único; detalha serviços afetados apenas se houver problema
-    tipo: 'summary'   // summary.json retorna components[] — podemos extrair detalhes do que degradou/caiu
+    nome:       'Legitimuz',
+    urlStatus:  'https://legitimuz.statuspage.io/api/v2/status.json',
+    urlSummary: 'https://legitimuz.statuspage.io/api/v2/summary.json',
+    categoria:  'kyc'
   },
   {
-    nome: 'Legitimuz',
-    url: 'https://legitimuz.statuspage.io/api/v2/summary.json',
-    categoria: 'kyc',
-    agregado: true,
-    tipo: 'summary'
-  },
-  {
-    nome: 'Unico',
-    url: 'https://status.unico.io/api/v2/summary.json',
-    categoria: 'kyc',
-    agregado: true,
-    tipo: 'summary'
+    nome:       'Unico',
+    urlStatus:  'https://status.unico.io/api/v2/status.json',
+    urlSummary: 'https://status.unico.io/api/v2/summary.json',
+    categoria:  'kyc'
   }
 ];
 
-// Componentes que devem ser ignorados no monitor
-const IGNORADOS = ['RTM', 'JD'];
+// Componentes da Okto a ignorar
+const IGNORADOS_OKTO = ['RTM', 'JD'];
 
 // ─────────────────────────────────────────────
 // CONFIGURAÇÃO DE ALERTAS
@@ -78,8 +79,8 @@ const estadoAnterior = {};
 
 let ultimosResultados = {
   timestamp:             null,
-  componentes:           [],   // Todos os componentes individuais (usado para alertas e histórico)
-  componentes_dashboard: [],   // O que o frontend exibe: Okto individual + 1 card por KYC
+  componentes:           [],   // Internos: todos individuais (alertas + histórico)
+  componentes_dashboard: [],   // O que o frontend renderiza
   incidentes:            [],
   manutencoes:           [],
   resumo:                {},
@@ -120,14 +121,27 @@ wss.on('connection', (ws) => {
 // MAPEAMENTO DE STATUS
 // ─────────────────────────────────────────────
 
+// Mapeia status do statuspage.io (components[].status) para UP / DEGRADED / DOWN
 function mapearStatus(statusOriginal) {
   switch (statusOriginal) {
-    case 'operational':                       return 'UP';
+    case 'operational':           return 'UP';
     case 'degraded_performance':
-    case 'under_maintenance':                 return 'DEGRADED';
+    case 'under_maintenance':     return 'DEGRADED';
     case 'partial_outage':
-    case 'major_outage':                      return 'DOWN';
-    default:                                  return 'UP';
+    case 'major_outage':          return 'DOWN';
+    default:                      return 'UP';
+  }
+}
+
+// Mapeia o campo "indicator" do status.json para UP / DEGRADED / DOWN
+function mapearIndicator(indicator) {
+  switch (indicator) {
+    case 'none':                  return 'UP';
+    case 'minor':
+    case 'maintenance':           return 'DEGRADED';
+    case 'major':
+    case 'critical':              return 'DOWN';
+    default:                      return 'UP';
   }
 }
 
@@ -141,94 +155,286 @@ function labelStatus(status) {
 }
 
 // ─────────────────────────────────────────────
-// SEPARAR COMPONENTES INDIVIDUAIS
+// HTTP COM RETRY
 // ─────────────────────────────────────────────
 
-function separarComponentes(rawComponents, provedor, categoria) {
-  const grupos = {};
-  rawComponents
-    .filter(c => c.group === true)
-    .forEach(g => { grupos[g.id] = g.name; });
+async function httpGet(url, tentativa = 1) {
+  try {
+    const res = await axios.get(url, {
+      timeout: TIMEOUT_MS,
+      headers: { 'User-Agent': 'PixHealthMonitor/1.0' }
+    });
+    return { data: res.data, sucesso: true };
+  } catch (erro) {
+    const tipoErro = erro.code === 'ECONNABORTED' ? 'Timeout'
+                   : erro.code === 'ENOTFOUND'    ? 'DNS Error'
+                   : erro.response                ? `HTTP ${erro.response.status}`
+                                                  : 'Network Error';
+    if (tentativa < MAX_RETRIES) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      return httpGet(url, tentativa + 1);
+    }
+    return { data: null, sucesso: false, tipoErro };
+  }
+}
 
-  return rawComponents
-    .filter(c => c.group === false && !IGNORADOS.includes(c.name))
+// ─────────────────────────────────────────────
+// OKTO — CONSULTA COMPLETA (summary.json)
+// Retorna cards individuais: bancos + Central Bank + Withdraw/Deposit
+// ─────────────────────────────────────────────
+
+async function consultarOkto() {
+  console.log(`[Okto] Consultando summary.json...`);
+  const inicio = Date.now();
+  const { data, sucesso, tipoErro } = await httpGet(OKTO_CONFIG.urlSummary);
+
+  if (!sucesso || !data) {
+    console.error(`[Okto] ✗ Falha total: ${tipoErro}`);
+    return {
+      componentes: [{
+        id:              'Okto Payments-erro',
+        nome:            '⚠️ Erro de Comunicação - Okto Payments',
+        provedor:        'Okto Payments',
+        categoria:       'pagamentos',
+        grupo:           null,
+        status:          'DEGRADED',
+        status_original: 'erro_comunicacao',
+        label:           'Erro de Comunicação',
+        descricao:       `Não foi possível conectar (${tipoErro})`,
+        atualizado_em:   new Date().toISOString()
+      }],
+      incidentes:  [],
+      manutencoes: []
+    };
+  }
+
+  const latencia = Date.now() - inicio;
+  console.log(`[Okto] ✓ Resposta em ${latencia}ms`);
+
+  const rawComponents = data.components || [];
+
+  // Monta mapa de grupos
+  const grupos = {};
+  rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
+
+  // Filtra apenas folhas (não são grupos) e remove os ignorados
+  const componentes = rawComponents
+    .filter(c => c.group === false && !IGNORADOS_OKTO.includes(c.name))
     .map(c => {
       const status = mapearStatus(c.status);
       return {
-        id:              `${provedor}-${c.id}`,
+        id:              `Okto Payments-${c.id}`,
         nome:            c.name,
-        provedor:        provedor,
-        categoria:       categoria,
+        provedor:        'Okto Payments',
+        categoria:       'pagamentos',
         grupo:           c.group_id ? (grupos[c.group_id] || null) : null,
         status,
         status_original: c.status,
         label:           labelStatus(status),
         descricao:       c.description || null,
-        atualizado_em:   c.updated_at  || new Date().toISOString(),
+        atualizado_em:   c.updated_at  || new Date().toISOString()
       };
     })
     .sort((a, b) => {
-      const ordem = { DOWN: 0, DEGRADED: 1, UP: 2 };
-      return (ordem[a.status] ?? 99) - (ordem[b.status] ?? 99);
+      const ord = { DOWN: 0, DEGRADED: 1, UP: 2 };
+      return (ord[a.status] ?? 2) - (ord[b.status] ?? 2);
     });
+
+  const incidentes = (data.incidents || []).map(i => ({
+    id: `Okto Payments-${i.id}`, provedor: 'Okto Payments',
+    nome: i.name, status: i.status, impacto: i.impact,
+    atualizado: i.updated_at, url: i.shortlink || null
+  }));
+
+  const manutencoes = (data.scheduled_maintenances || []).map(m => ({
+    id: `Okto Payments-${m.id}`, provedor: 'Okto Payments',
+    nome: m.name, status: m.status,
+    inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
+  }));
+
+  console.log(`[Okto] ${componentes.length} cards individuais`);
+  return { componentes, incidentes, manutencoes };
 }
 
 // ─────────────────────────────────────────────
-// CRIAR CARD AGREGADO (1 card por processadora KYC)
-// ─────────────────────────────────────────────
-// Regra:
-//   • Tudo UP  → card verde, sem detalhes
-//   • DEGRADED → card amarelo + lista de serviços afetados com nome e motivo
-//   • DOWN     → card vermelho + lista de serviços fora do ar com nome e motivo
+// KYC — CONSULTA EM 2 ETAPAS
 //
-// Os componentes vêm do summary.json (components[]) — temos nome, status e description
-// de cada serviço individual, o que permite apontar exatamente o que quebrou.
+// Etapa 1: status.json  → indicator geral → UP / DEGRADED / DOWN
+// Etapa 2: summary.json → SOMENTE se não for UP → lista serviços afetados
+//
+// Resultado: SEMPRE 1 único card por processadora na dashboard
+// ─────────────────────────────────────────────
 
-function criarCardAgregado(provedor, componentes) {
-  const total    = componentes.length;
-  const up       = componentes.filter(c => c.status === 'UP').length;
-  const degraded = componentes.filter(c => c.status === 'DEGRADED').length;
-  const down     = componentes.filter(c => c.status === 'DOWN').length;
+async function consultarKYC(config) {
+  console.log(`[${config.nome}] Consultando status.json...`);
 
-  let statusGeral  = 'UP';
-  let mensagem     = 'Todos os serviços operacionais';
-  let problematicos = [];
+  // ── Etapa 1: status geral ──
+  const { data: statusData, sucesso: statusOk, tipoErro: statusErro } =
+    await httpGet(config.urlStatus);
 
-  if (down > 0) {
-    statusGeral   = 'DOWN';
-    // Inclui DOWN + DEGRADED nos detalhes quando há DOWN, para visão completa
-    problematicos = componentes.filter(c => c.status === 'DOWN' || c.status === 'DEGRADED');
-    const plural  = down > 1 ? 's' : '';
-    mensagem      = `${down} serviço${plural} fora do ar${degraded > 0 ? ` e ${degraded} com degradação` : ''}`;
-  } else if (degraded > 0) {
-    statusGeral   = 'DEGRADED';
-    problematicos = componentes.filter(c => c.status === 'DEGRADED');
-    const plural  = degraded > 1 ? 's' : '';
-    mensagem      = `${degraded} serviço${plural} com degradação`;
+  if (!statusOk || !statusData) {
+    console.error(`[${config.nome}] ✗ status.json falhou: ${statusErro}`);
+    return {
+      card: {
+        id:            `agregado-${config.nome}`,
+        nome:          config.nome,
+        provedor:      config.nome,
+        categoria:     'kyc',
+        status:        'DEGRADED',
+        label:         'DEGRADAÇÃO',
+        mensagem:      `Não foi possível verificar o status (${statusErro})`,
+        detalhes:      [],
+        atualizado_em: new Date().toISOString(),
+        agregado:      true
+      },
+      componentesInternos: [],
+      incidentes:          [],
+      manutencoes:         []
+    };
   }
 
-  // Detalhes: nome do serviço + status + motivo (description da statuspage)
-  // Array vazio quando tudo está UP — frontend não renderiza seção de detalhes
-  const detalhes = problematicos.map(c => ({
-    nome:   c.nome,
-    status: c.label,  // 'DEGRADAÇÃO' ou 'DOWN'
-    motivo: c.descricao && c.descricao.trim() !== ''
-              ? c.descricao
-              : `Instabilidade reportada na StatusPage (${c.status_original})`
-  }));
+  const indicator   = statusData.status?.indicator  || 'none';
+  const description = statusData.status?.description || '';
+  const statusGeral = mapearIndicator(indicator);
+
+  console.log(`[${config.nome}] ✓ indicator="${indicator}" → ${statusGeral}`);
+
+  // ── Tudo operacional: card verde, sem buscar detalhes ──
+  if (statusGeral === 'UP') {
+    return {
+      card: {
+        id:            `agregado-${config.nome}`,
+        nome:          config.nome,
+        provedor:      config.nome,
+        categoria:     'kyc',
+        status:        'UP',
+        label:         'OPERACIONAL',
+        mensagem:      'Todos os serviços operacionais',
+        detalhes:      [],
+        atualizado_em: new Date().toISOString(),
+        agregado:      true
+      },
+      componentesInternos: [{
+        id:              `${config.nome}-geral`,
+        nome:            config.nome,
+        provedor:        config.nome,
+        categoria:       'kyc',
+        status:          'UP',
+        status_original: indicator,
+        label:           'OPERACIONAL',
+        descricao:       description,
+        atualizado_em:   new Date().toISOString()
+      }],
+      incidentes:  [],
+      manutencoes: []
+    };
+  }
+
+  // ── Há problema: busca summary.json para identificar serviços afetados ──
+  console.log(`[${config.nome}] ⚠️  ${statusGeral} — buscando detalhes via summary.json...`);
+
+  const { data: summaryData, sucesso: summaryOk } = await httpGet(config.urlSummary);
+
+  let detalhes            = [];
+  let componentesInternos = [];
+  let incidentes          = [];
+  let manutencoes         = [];
+  let mensagem            = description || labelStatus(statusGeral);
+
+  if (summaryOk && summaryData) {
+    const rawComponents = summaryData.components || [];
+    const grupos = {};
+    rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
+
+    // Todos os componentes individuais (para alertas internos)
+    componentesInternos = rawComponents
+      .filter(c => c.group === false)
+      .map(c => {
+        const st = mapearStatus(c.status);
+        return {
+          id:              `${config.nome}-${c.id}`,
+          nome:            c.name,
+          provedor:        config.nome,
+          categoria:       'kyc',
+          grupo:           c.group_id ? (grupos[c.group_id] || null) : null,
+          status:          st,
+          status_original: c.status,
+          label:           labelStatus(st),
+          descricao:       c.description || null,
+          atualizado_em:   c.updated_at  || new Date().toISOString()
+        };
+      });
+
+    // Serviços com problema → aparecem nos detalhes do card
+    const afetados = componentesInternos.filter(c => c.status !== 'UP');
+    const nDown    = afetados.filter(c => c.status === 'DOWN').length;
+    const nDeg     = afetados.filter(c => c.status === 'DEGRADED').length;
+
+    if (nDown > 0 && nDeg > 0) {
+      mensagem = `${nDown} serviço${nDown > 1 ? 's' : ''} fora do ar e ${nDeg} com degradação`;
+    } else if (nDown > 0) {
+      mensagem = `${nDown} serviço${nDown > 1 ? 's' : ''} fora do ar`;
+    } else if (nDeg > 0) {
+      mensagem = `${nDeg} serviço${nDeg > 1 ? 's' : ''} com degradação`;
+    }
+
+    // Detalha cada serviço afetado com nome e motivo
+    detalhes = afetados.map(c => ({
+      nome:   c.nome,
+      status: c.label,
+      motivo: c.descricao && c.descricao.trim()
+                ? c.descricao
+                : `Instabilidade reportada na StatusPage (${c.status_original})`
+    }));
+
+    incidentes  = (summaryData.incidents || []).map(i => ({
+      id: `${config.nome}-${i.id}`, provedor: config.nome,
+      nome: i.name, status: i.status, impacto: i.impact,
+      atualizado: i.updated_at, url: i.shortlink || null
+    }));
+
+    manutencoes = (summaryData.scheduled_maintenances || []).map(m => ({
+      id: `${config.nome}-${m.id}`, provedor: config.nome,
+      nome: m.name, status: m.status,
+      inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
+    }));
+
+    console.log(`[${config.nome}] ✓ ${afetados.length} serviço(s) afetado(s):`);
+    afetados.forEach(c => console.log(`  ↳ ${c.nome}: ${c.label}`));
+
+  } else {
+    // summary.json indisponível — card com status geral sem detalhar serviços
+    console.warn(`[${config.nome}] ⚠️  summary.json indisponível — card sem detalhes de serviço`);
+    mensagem = description || `Instabilidade detectada (${labelStatus(statusGeral)})`;
+    componentesInternos = [{
+      id:              `${config.nome}-geral`,
+      nome:            config.nome,
+      provedor:        config.nome,
+      categoria:       'kyc',
+      status:          statusGeral,
+      status_original: indicator,
+      label:           labelStatus(statusGeral),
+      descricao:       description,
+      atualizado_em:   new Date().toISOString()
+    }];
+  }
 
   return {
-    id:            `agregado-${provedor}`,
-    nome:          provedor,
-    provedor:      provedor,
-    categoria:     'kyc',
-    status:        statusGeral,
-    label:         labelStatus(statusGeral),
-    mensagem,
-    detalhes,
-    resumo:        { total, up, degraded, down },
-    atualizado_em: new Date().toISOString(),
-    agregado:      true
+    card: {
+      id:            `agregado-${config.nome}`,
+      nome:          config.nome,
+      provedor:      config.nome,
+      categoria:     'kyc',
+      status:        statusGeral,
+      label:         labelStatus(statusGeral),
+      mensagem,
+      detalhes,
+      atualizado_em: new Date().toISOString(),
+      agregado:      true
+    },
+    componentesInternos,
+    incidentes,
+    manutencoes
   };
 }
 
@@ -240,14 +446,11 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
   const emoji = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
   const label = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
 
-  const isRecovery = statusNovo === 'UP';
-  const horaAgora  = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dataAgora  = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-  let grupoDisplay = componente.grupo || 'APIs & Infraestrutura';
-  if (componente.categoria === 'kyc') grupoDisplay = 'Processadoras KYC';
-
-  const mencoes = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
+  const isRecovery   = statusNovo === 'UP';
+  const horaAgora    = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dataAgora    = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const grupoDisplay = componente.categoria === 'kyc' ? 'Processadoras KYC' : (componente.grupo || 'APIs & Infraestrutura');
+  const mencoes      = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
 
   const titulo = isRecovery
     ? `${emoji.UP} Serviço Recuperado — ${componente.provedor}: ${componente.nome}`
@@ -273,9 +476,9 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
         type: 'section',
         fields: [
           { type: 'mrkdwn', text: `*🏢 Provedor:*\n\`${componente.provedor}\`` },
-          { type: 'mrkdwn', text: `*🔧 Componente:*\n\`${componente.nome}\`` },
+          { type: 'mrkdwn', text: `*🔧 Serviço:*\n\`${componente.nome}\`` },
           { type: 'mrkdwn', text: `*📂 Categoria:*\n${grupoDisplay}` },
-          { type: 'mrkdwn', text: `*⚠️ Problema:*\n${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*` },
+          { type: 'mrkdwn', text: `*⚠️ Mudança:*\n${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*` },
           { type: 'mrkdwn', text: `*📡 Status técnico:*\n\`${componente.status_original || statusNovo.toLowerCase()}\`` },
           { type: 'mrkdwn', text: `*🕐 Detectado:*\n${horaAgora} de ${dataAgora}` }
         ]
@@ -283,16 +486,16 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
       { type: 'divider' },
       {
         type: 'context',
-        elements: [{ type: 'mrkdwn', text: `Pix Health Monitor · Multi-Provider StatusPage · ${componente.provedor}` }]
+        elements: [{ type: 'mrkdwn', text: `Pix Health Monitor · Multi-Provider · ${componente.provedor}` }]
       }
     ]
   };
 
   try {
     await axios.post(SLACK_WEBHOOK, payload, { timeout: 8000 });
-    console.log(`[Slack] Alerta enviado: ${componente.provedor}/${componente.nome} | ${label[statusAnterior]} → ${label[statusNovo]}`);
+    console.log(`[Slack] Alerta: ${componente.provedor}/${componente.nome} | ${label[statusAnterior]} → ${label[statusNovo]}`);
   } catch (e) {
-    console.error('[Slack] Erro ao enviar alerta:', e.message);
+    console.error('[Slack] Erro:', e.message);
   }
 }
 
@@ -308,20 +511,14 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
   catch (e) { console.warn('[Email] nodemailer não instalado. Rode: npm install nodemailer'); return; }
 
   const label      = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
-  const labelAnt   = label[statusAnterior] || statusAnterior;
-  const labelNovo  = label[statusNovo]     || statusNovo;
-  const hora       = new Date().toLocaleString('pt-BR');
   const isRecovery = statusNovo === 'UP';
   const cor        = statusNovo === 'DOWN' ? '#ff4d4d' : statusNovo === 'DEGRADED' ? '#f5c842' : '#1fd97a';
-
-  let grupoDisplay = componente.grupo || 'APIs & Infraestrutura';
-  if (componente.categoria === 'kyc') grupoDisplay = 'Processadoras KYC';
+  const hora       = new Date().toLocaleString('pt-BR');
+  const grupoDisplay = componente.categoria === 'kyc' ? 'Processadoras KYC' : (componente.grupo || 'APIs & Infraestrutura');
 
   const transporter = nodemailer.createTransport({
-    host:   SMTP_HOST,
-    port:   SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth:   { user: SMTP_USER, pass: SMTP_PASS }
+    host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
   });
 
   const html = `
@@ -338,7 +535,7 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
           <td style="padding:10px 0;color:#f0f0f5;font-size:14px;font-weight:600;border-bottom:1px solid #1a1a20">${componente.provedor}</td>
         </tr>
         <tr>
-          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;border-bottom:1px solid #1a1a20">Componente</td>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;border-bottom:1px solid #1a1a20">Serviço</td>
           <td style="padding:10px 0;color:#f0f0f5;font-size:14px;font-weight:600;border-bottom:1px solid #1a1a20">${componente.nome}</td>
         </tr>
         <tr>
@@ -348,9 +545,9 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
         <tr>
           <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;border-bottom:1px solid #1a1a20">Mudança</td>
           <td style="padding:10px 0;font-size:14px;border-bottom:1px solid #1a1a20">
-            <span style="color:#a0a0b0">${labelAnt}</span>
+            <span style="color:#a0a0b0">${label[statusAnterior] || statusAnterior}</span>
             <span style="color:#4a4a5a"> → </span>
-            <span style="color:${cor};font-weight:700">${labelNovo}</span>
+            <span style="color:${cor};font-weight:700">${label[statusNovo] || statusNovo}</span>
           </td>
         </tr>
         <tr>
@@ -369,21 +566,19 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
       subject: `${isRecovery ? '✅ Recuperado' : statusNovo === 'DOWN' ? '🔴 DOWN' : '🟡 Degradação'} — ${componente.provedor}: ${componente.nome}`,
       html
     });
-    console.log(`[Email] Alerta enviado para ${ALERT_EMAIL_TO}: ${componente.provedor}/${componente.nome} → ${labelNovo}`);
+    console.log(`[Email] Alerta enviado: ${componente.provedor}/${componente.nome}`);
   } catch (e) {
-    console.error('[Email] Erro ao enviar:', e.message);
+    console.error('[Email] Erro:', e.message);
   }
 }
 
 // ─────────────────────────────────────────────
 // VERIFICAR E DISPARAR ALERTAS
-// Alertas sempre nos componentes individuais (não nos cards agregados)
+// Sempre sobre componentes individuais internos
 // ─────────────────────────────────────────────
 
 async function verificarAlertas(componentes) {
   for (const c of componentes) {
-    if (c.agregado) continue; // Cards agregados são só visuais
-
     const anterior = estadoAnterior[c.id];
 
     if (anterior === undefined) {
@@ -403,127 +598,38 @@ async function verificarAlertas(componentes) {
 }
 
 // ─────────────────────────────────────────────
-// CONSULTAR STATUSPAGE (COM RETRY)
-// ─────────────────────────────────────────────
-
-async function consultarStatusPage(apiConfig, tentativa = 1) {
-  try {
-    const inicio = Date.now();
-    console.log(`[${apiConfig.nome}] Tentativa ${tentativa}/${MAX_RETRIES}...`);
-
-    const response = await axios.get(apiConfig.url, {
-      timeout: TIMEOUT_MS,
-      headers: { 'User-Agent': 'PixHealthMonitor/1.0' }
-    });
-    const latencia = Date.now() - inicio;
-    console.log(`[${apiConfig.nome}] ✓ Resposta em ${latencia}ms`);
-
-    const data       = response.data;
-    const componentes = separarComponentes(data.components || [], apiConfig.nome, apiConfig.categoria);
-    const geral      = data.status || {};
-
-    const incidentes = (data.incidents || []).map(i => ({
-      id:         `${apiConfig.nome}-${i.id}`,
-      provedor:   apiConfig.nome,
-      nome:       i.name,
-      status:     i.status,
-      impacto:    i.impact,
-      atualizado: i.updated_at,
-      url:        i.shortlink || null
-    }));
-
-    const manutencoes = (data.scheduled_maintenances || []).map(m => ({
-      id:         `${apiConfig.nome}-${m.id}`,
-      provedor:   apiConfig.nome,
-      nome:       m.name,
-      status:     m.status,
-      inicio:     m.scheduled_for,
-      fim:        m.scheduled_until,
-      atualizado: m.updated_at
-    }));
-
-    return { componentes, geral, latencia, incidentes, manutencoes, sucesso: true };
-
-  } catch (erro) {
-    const tipoErro = erro.code === 'ECONNABORTED' ? 'Timeout'
-                   : erro.code === 'ENOTFOUND'    ? 'DNS Error'
-                   : erro.response                ? `HTTP ${erro.response.status}`
-                                                  : 'Network Error';
-
-    console.error(`[${apiConfig.nome}] ✗ Falha tentativa ${tentativa}/${MAX_RETRIES}: ${tipoErro}`);
-
-    if (tentativa < MAX_RETRIES) {
-      console.log(`[${apiConfig.nome}] ⏳ Aguardando ${RETRY_DELAY_MS / 1000}s...`);
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-      return consultarStatusPage(apiConfig, tentativa + 1);
-    }
-
-    console.error(`[${apiConfig.nome}] ✗ FALHA TOTAL após ${MAX_RETRIES} tentativas`);
-
-    // Componente de erro único para este provedor
-    return {
-      componentes: [{
-        id:              `${apiConfig.nome}-erro`,
-        nome:            `⚠️ Erro de Comunicação - ${apiConfig.nome}`,
-        provedor:        apiConfig.nome,
-        categoria:       apiConfig.categoria,
-        grupo:           null,
-        status:          'DEGRADED',
-        status_original: 'erro_comunicacao',
-        label:           'Erro de Comunicação',
-        descricao:       `Não foi possível conectar após ${MAX_RETRIES} tentativas (${tipoErro})`,
-        atualizado_em:   new Date().toISOString(),
-      }],
-      geral:       { indicator: 'minor', description: `Erro: ${tipoErro}` },
-      latencia:    null,
-      incidentes:  [],
-      manutencoes: [],
-      sucesso:     false
-    };
-  }
-}
-
-// ─────────────────────────────────────────────
 // MONITORAMENTO PRINCIPAL
 // ─────────────────────────────────────────────
 
 async function monitorar() {
   console.log('\n' + '='.repeat(80));
-  console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} - Consultando todas as APIs...`);
+  console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
   console.log('='.repeat(80));
 
-  const resultados = await Promise.all(
-    APIS_MONITORADAS.map(api => consultarStatusPage(api))
-  );
+  // Consultas em paralelo
+  const [oktoResult, ...kycResults] = await Promise.all([
+    consultarOkto(),
+    ...KYC_CONFIGS.map(c => consultarKYC(c))
+  ]);
 
-  // Todos os componentes individuais (para alertas, histórico e API)
-  const todosComponentes   = resultados.flatMap(r => r.componentes);
-  const todosIncidentes    = resultados.flatMap(r => r.incidentes);
-  const todasManutencoes   = resultados.flatMap(r => r.manutencoes);
+  // ── Componentes internos (alertas + histórico) ──
+  const componentesOkto  = oktoResult.componentes;
+  const componentesKYC   = kycResults.flatMap(r => r.componentesInternos);
+  const todosComponentes = [...componentesOkto, ...componentesKYC];
 
-  // ──────────────────────────────────────────
-  // Monta o que vai aparecer na DASHBOARD:
-  //   • Okto → todos os cards individuais
-  //   • Serasa / Legitimuz / Unico → 1 card cada
-  // ──────────────────────────────────────────
-  const componentesDashboard = [];
+  // ── Incidentes e manutenções ──
+  const todosIncidentes  = [...oktoResult.incidentes,  ...kycResults.flatMap(r => r.incidentes)];
+  const todasManutencoes = [...oktoResult.manutencoes, ...kycResults.flatMap(r => r.manutencoes)];
 
-  APIS_MONITORADAS.forEach((api, idx) => {
-    const comp = resultados[idx].componentes;
+  // ── Dashboard: Okto individual + 1 card por KYC ──
+  const componentesDashboard = [
+    ...componentesOkto,                 // Cards individuais Okto
+    ...kycResults.map(r => r.card)      // 1 card por processadora KYC
+  ];
 
-    if (api.agregado) {
-      // 1 único card por processadora KYC
-      componentesDashboard.push(criarCardAgregado(api.nome, comp));
-    } else {
-      // Cards individuais (Okto: 10 bancos + Central Bank + Withdraw/Deposit)
-      componentesDashboard.push(...comp);
-    }
-  });
-
-  // Separação por categoria (para a API /api/status)
   const porCategoria = {
-    pagamentos: todosComponentes.filter(c => c.categoria === 'pagamentos'),
-    kyc:        todosComponentes.filter(c => c.categoria === 'kyc')
+    pagamentos: componentesOkto,
+    kyc:        componentesKYC
   };
 
   const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
@@ -532,51 +638,42 @@ async function monitorar() {
 
   ultimosResultados = {
     timestamp:             new Date().toISOString(),
-    componentes:           todosComponentes,           // Todos individuais (alertas/histórico)
-    componentes_dashboard: componentesDashboard,       // O que a UI renderiza
+    componentes:           todosComponentes,
+    componentes_dashboard: componentesDashboard,
     por_categoria:         porCategoria,
     geral: { indicator: nDown > 0 ? 'critical' : nDegraded > 0 ? 'minor' : 'none' },
     incidentes:            todosIncidentes,
     manutencoes:           todasManutencoes,
     resumo: {
-      total:        todosComponentes.length,
-      up:           nUp,
-      degraded:     nDegraded,
-      down:         nDown,
+      total:           todosComponentes.length,
+      up:              nUp,
+      degraded:        nDegraded,
+      down:            nDown,
       dashboard_cards: componentesDashboard.length,
-      por_provedor: APIS_MONITORADAS.map(api => ({
-        nome:       api.nome,
-        componentes: todosComponentes.filter(c => c.provedor === api.nome).length,
-        agregado:   api.agregado
-      }))
+      okto_cards:      componentesOkto.length,
+      kyc_cards:       kycResults.length
     }
   };
 
-  // Histórico do dia (salva componentes individuais)
+  // Histórico
   historicoDia.push({
     timestamp: new Date().toISOString(),
     hora:      new Date().toLocaleTimeString('pt-BR'),
     componentes: todosComponentes.map(c => ({
-      id:              c.id,
-      nome:            c.nome,
-      provedor:        c.provedor,
-      categoria:       c.categoria,
-      grupo:           c.grupo,
-      status:          c.status,
-      status_original: c.status_original
+      id: c.id, nome: c.nome, provedor: c.provedor,
+      categoria: c.categoria, grupo: c.grupo || null,
+      status: c.status, status_original: c.status_original
     }))
   });
 
   if (historicoDia.length > 1440) historicoDia.shift();
 
-  // Reset meia-noite
   const agora = new Date();
   if (agora.getHours() === 0 && agora.getMinutes() === 0) {
     console.log('[Sistema] Resetando histórico (meia-noite)');
     historicoDia = [];
   }
 
-  // Alertas sempre nos componentes individuais
   await verificarAlertas(todosComponentes);
 
   // Broadcast WebSocket
@@ -593,12 +690,10 @@ async function monitorar() {
     }) + '\n');
   } catch (e) {}
 
-  console.log(`\n[Monitor] RESUMO GERAL:`);
-  console.log(`  Componentes totais : ${todosComponentes.length} | UP: ${nUp} | DEGRADED: ${nDegraded} | DOWN: ${nDown}`);
-  console.log(`  Cards na dashboard : ${componentesDashboard.length} (Okto individual + 3 KYC agregados)`);
-  console.log(`  Pagamentos (Okto)  : ${porCategoria.pagamentos.length} componentes`);
-  console.log(`  KYC (3 provedores) : ${porCategoria.kyc.length} componentes → 3 cards`);
-  if (todosIncidentes.length > 0) console.log(`  Incidentes ativos  : ${todosIncidentes.length}`);
+  console.log(`\n[Monitor] RESUMO:`);
+  console.log(`  Cards dashboard : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC)`);
+  console.log(`  Status geral    : UP=${nUp} | DEGRADED=${nDegraded} | DOWN=${nDown}`);
+  if (todosIncidentes.length > 0) console.log(`  Incidentes      : ${todosIncidentes.length}`);
   console.log('='.repeat(80) + '\n');
 }
 
@@ -612,22 +707,23 @@ app.get('/api/status', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({
-    status:              'alive',
-    timestamp:           new Date().toISOString(),
-    uptime_segundos:     Math.floor(process.uptime()),
-    clientes_ws:         clientesConectados.length,
-    historico_size:      historicoDia.length,
-    ultima_verificacao:  ultimosResultados.timestamp || null,
+    status:             'alive',
+    timestamp:          new Date().toISOString(),
+    uptime_segundos:    Math.floor(process.uptime()),
+    clientes_ws:        clientesConectados.length,
+    historico_size:     historicoDia.length,
+    ultima_verificacao: ultimosResultados.timestamp || null,
     config: {
-      timeout_ms:          TIMEOUT_MS,
-      max_retries:         MAX_RETRIES,
-      intervalo_segundos:  INTERVALO_SEGUNDOS
+      timeout_ms:         TIMEOUT_MS,
+      max_retries:        MAX_RETRIES,
+      intervalo_segundos: INTERVALO_SEGUNDOS
     },
-    apis_monitoradas: APIS_MONITORADAS.map(a => ({
-      nome:      a.nome,
-      categoria: a.categoria,
-      agregado:  a.agregado
-    }))
+    endpoints: {
+      okto:      OKTO_CONFIG.urlSummary,
+      serasa:    KYC_CONFIGS[0].urlStatus,
+      legitimuz: KYC_CONFIGS[1].urlStatus,
+      unico:     KYC_CONFIGS[2].urlStatus
+    }
   });
 });
 
@@ -637,21 +733,18 @@ app.get('/api/historico', (req, res) => {
 
   if (inicio && fim) {
     dados = dados.filter(item => {
-      const hora      = new Date(item.timestamp).getHours();
-      const horaInicio = parseInt(inicio);
-      const horaFim    = parseInt(fim);
-      return hora >= horaInicio && hora <= horaFim;
+      const h = new Date(item.timestamp).getHours();
+      return h >= parseInt(inicio) && h <= parseInt(fim);
     });
   }
-
-  if (provedor)   dados = dados.map(item => ({ ...item, componentes: item.componentes.filter(c => c.provedor === provedor) }));
+  if (provedor)   dados = dados.map(item => ({ ...item, componentes: item.componentes.filter(c => c.provedor  === provedor) }));
   if (categoria)  dados = dados.map(item => ({ ...item, componentes: item.componentes.filter(c => c.categoria === categoria) }));
   if (componente) dados = dados.map(item => ({ ...item, componentes: item.componentes.filter(c => c.id === componente || c.nome === componente) }));
 
   res.json({
     total: dados.length,
     periodo: {
-      inicio: dados[0]?.timestamp           || null,
+      inicio: dados[0]?.timestamp                || null,
       fim:    dados[dados.length - 1]?.timestamp || null
     },
     dados
@@ -662,7 +755,7 @@ app.get('/api/historico/exportar', (req, res) => {
   if (!historicoDia.length) return res.status(404).send('Nenhum dado disponível para exportar.');
 
   const dataHoje  = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
-  const cabecalho = ['data', 'hora', 'provedor', 'categoria', 'componente_id', 'componente_nome', 'grupo', 'status', 'status_original'].join(';');
+  const cabecalho = ['data','hora','provedor','categoria','componente_id','componente_nome','grupo','status','status_original'].join(';');
   const linhas    = [];
 
   historicoDia.forEach(item => {
@@ -673,10 +766,9 @@ app.get('/api/historico/exportar', (req, res) => {
     });
   });
 
-  const csv = '\uFEFF' + cabecalho + '\n' + linhas.join('\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="relatorio_${dataHoje}.csv"`);
-  res.send(csv);
+  res.send('\uFEFF' + cabecalho + '\n' + linhas.join('\n'));
 });
 
 app.get('/api/oscilacoes', (req, res) => {
@@ -686,16 +778,11 @@ app.get('/api/oscilacoes', (req, res) => {
 
   const porHora = {};
   historicoDia.forEach(item => {
-    const hora = new Date(item.timestamp).getHours();
-    if (!porHora[hora]) {
-      porHora[hora] = { hora: `${String(hora).padStart(2, '0')}:00`, verificacoes: 0, incidentes: 0, componentesAfetados: new Set() };
-    }
-    porHora[hora].verificacoes++;
+    const h = new Date(item.timestamp).getHours();
+    if (!porHora[h]) porHora[h] = { hora: `${String(h).padStart(2,'0')}:00`, verificacoes: 0, incidentes: 0, afetados: new Set() };
+    porHora[h].verificacoes++;
     item.componentes.forEach(c => {
-      if (c.status !== 'UP') {
-        porHora[hora].incidentes++;
-        porHora[hora].componentesAfetados.add(`${c.provedor}/${c.nome}`);
-      }
+      if (c.status !== 'UP') { porHora[h].incidentes++; porHora[h].afetados.add(`${c.provedor}/${c.nome}`); }
     });
   });
 
@@ -703,15 +790,14 @@ app.get('/api/oscilacoes', (req, res) => {
     hora:                 h.hora,
     verificacoes:         h.verificacoes,
     incidentes:           h.incidentes,
-    componentes_afetados: h.componentesAfetados.size,
-    nomes_afetados:       Array.from(h.componentesAfetados)
+    componentes_afetados: h.afetados.size,
+    nomes_afetados:       Array.from(h.afetados)
   })).sort((a, b) => a.hora.localeCompare(b.hora));
 
-  const horarioCritico = resultado.reduce(
-    (max, h) => h.incidentes > (max?.incidentes || 0) ? h : max, null
-  );
-
-  res.json({ horarioCritico, porHora: resultado });
+  res.json({
+    horarioCritico: resultado.reduce((max, h) => h.incidentes > (max?.incidentes || 0) ? h : max, null),
+    porHora:        resultado
+  });
 });
 
 // ─────────────────────────────────────────────
@@ -723,8 +809,7 @@ function iniciarKeepAlive() {
     try {
       const selfUrl  = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORTA}`;
       const response = await axios.get(`${selfUrl}/api/health`, {
-        timeout: 5000,
-        headers: { 'User-Agent': 'Internal-KeepAlive/1.0' }
+        timeout: 5000, headers: { 'User-Agent': 'Internal-KeepAlive/1.0' }
       });
       console.log(`[Keep-Alive] OK — Uptime: ${response.data.uptime_segundos}s | Histórico: ${response.data.historico_size} registros`);
     } catch (erro) {
@@ -739,21 +824,20 @@ function iniciarKeepAlive() {
 // ─────────────────────────────────────────────
 
 server.listen(PORTA, '0.0.0.0', () => {
-  console.log('\n' + '='.repeat(60));
-  console.log('Pix Health Monitor — Multi-Provider com Cards Agregados KYC');
-  console.log('='.repeat(60));
+  console.log('\n' + '='.repeat(65));
+  console.log('Pix Health Monitor — Multi-Provider');
+  console.log('='.repeat(65));
   console.log(`Servidor  : http://0.0.0.0:${PORTA}`);
   console.log(`Intervalo : ${INTERVALO_SEGUNDOS}s | Timeout: ${TIMEOUT_MS / 1000}s | Retries: ${MAX_RETRIES}`);
-  console.log(`\nAPIs Monitoradas:`);
-  APIS_MONITORADAS.forEach(api => {
-    const tipo    = api.agregado ? '[1 CARD AGREGADO]' : '[CARDS INDIVIDUAIS]';
-    const endpoint = api.url.split('/').pop(); // ex: summary.json
-    console.log(`  • ${api.nome.padEnd(20)} ${tipo.padEnd(20)} ${api.categoria.padEnd(12)} ← ${endpoint}`);
+  console.log(`\nEndpoints configurados:`);
+  console.log(`  • Okto Payments  [CARDS INDIVIDUAIS]  → summary.json`);
+  KYC_CONFIGS.forEach(k => {
+    console.log(`  • ${k.nome.padEnd(12)} [1 CARD AGREGADO]    → status.json  (+summary.json se degradado/down)`);
   });
-  console.log(`\nIgnorados : ${IGNORADOS.join(' | ')}`);
-  console.log(`Slack     : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
-  console.log(`Email     : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
-  console.log('='.repeat(60) + '\n');
+  console.log(`\nIgnorados Okto : ${IGNORADOS_OKTO.join(' | ')}`);
+  console.log(`Slack          : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
+  console.log(`Email          : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
+  console.log('='.repeat(65) + '\n');
 
   iniciarKeepAlive();
   monitorar();
