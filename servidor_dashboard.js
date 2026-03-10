@@ -15,7 +15,29 @@ const PORTA              = process.env.PORT || 3000;
 const INTERVALO_SEGUNDOS = process.env.INTERVALO_MONITORAMENTO || 60;
 const SELF_PING_INTERVAL = 14 * 60 * 1000;
 
-const STATUSPAGE_URL = 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json';
+// ✨ NOVO: URLs das APIs a monitorar
+const APIS_MONITORADAS = [
+  {
+    nome: 'Okto Payments',
+    url: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
+    categoria: 'pagamentos'
+  },
+  {
+    nome: 'Legitimuz',
+    url: 'https://legitimuz.statuspage.io/api/v2/summary.json',
+    categoria: 'kyc'
+  },
+  {
+    nome: 'AllowMe',
+    url: 'https://status.allowme.com.br/api/v2/summary.json',
+    categoria: 'kyc'
+  },
+  {
+    nome: 'Unico',
+    url: 'https://status.unico.io/api/v2/summary.json',
+    categoria: 'kyc'
+  }
+];
 
 // Componentes ignorados no monitor
 const IGNORADOS = ['RTM', 'JD'];
@@ -28,7 +50,7 @@ const IGNORADOS = ['RTM', 'JD'];
 const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
 const SLACK_MENTIONS = ['U09G386SN01', 'U09BNJL6E2X', 'U09QSBQ7SEP'];
 
-// Email (opcional — configure as variáveis no Render se quiser ativar futuramente)
+// Email (opcional)
 const ALERT_EMAIL_TO  = process.env.ALERT_EMAIL_TO     || null;
 const ALERT_EMAIL_FROM= process.env.ALERT_EMAIL_FROM   || null;
 const SMTP_HOST       = process.env.SMTP_HOST          || null;
@@ -36,15 +58,20 @@ const SMTP_PORT       = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER       = process.env.SMTP_USER          || null;
 const SMTP_PASS       = process.env.SMTP_PASS          || null;
 
-// Mapa de estado anterior por componente { [id]: 'UP' | 'DEGRADED' | 'DOWN' }
-// Evita alertas repetidos — só notifica quando o status MUDA
+// Mapa de estado anterior por componente
 const estadoAnterior = {};
 
 // ─────────────────────────────────────────────
 // ESTADO GLOBAL
 // ─────────────────────────────────────────────
 
-let ultimosResultados = { timestamp: null, componentes: [], incidentes: [], resumo: {} };
+let ultimosResultados = { 
+  timestamp: null, 
+  componentes: [], 
+  incidentes: [], 
+  resumo: {},
+  por_categoria: { pagamentos: [], kyc: [] } // ✨ NOVO
+};
 let clientesConectados = [];
 let historicoDia = [];
 
@@ -105,11 +132,9 @@ function labelStatus(status) {
 
 // ─────────────────────────────────────────────
 // SEPARAR COMPONENTES
-// group: true  → grupo pai — ignorar
-// group: false → componente real — exibir (exceto IGNORADOS)
 // ─────────────────────────────────────────────
 
-function separarComponentes(rawComponents) {
+function separarComponentes(rawComponents, provedor, categoria) {
   const grupos = {};
   rawComponents
     .filter(c => c.group === true)
@@ -120,8 +145,10 @@ function separarComponentes(rawComponents) {
     .map(c => {
       const status = mapearStatus(c.status);
       return {
-        id:              c.id,
+        id:              `${provedor}-${c.id}`, // ✨ ID único por provedor
         nome:            c.name,
+        provedor:        provedor, // ✨ NOVO
+        categoria:       categoria, // ✨ NOVO
         grupo:           c.group_id ? (grupos[c.group_id] || null) : null,
         status,
         status_original: c.status,
@@ -151,24 +178,28 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
   const isRecovery  = statusNovo === 'UP';
   const horaAgora   = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dataAgora   = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const grupo       = componente.grupo || 'APIs & Infraestrutura';
+  
+  // ✨ NOVO: Define grupo baseado na categoria
+  let grupoDisplay = componente.grupo || 'APIs & Infraestrutura';
+  if (componente.categoria === 'kyc') {
+    grupoDisplay = 'Processadoras KYC';
+  }
+  
   const mencoes     = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
 
   const titulo = isRecovery
-    ? `${emoji.UP} Serviço Recuperado — ${componente.nome}`
+    ? `${emoji.UP} Serviço Recuperado — ${componente.provedor}: ${componente.nome}`
     : statusNovo === 'DOWN'
-      ? `${emoji.DOWN} ALERTA CRÍTICO — ${componente.nome} está FORA DO AR`
-      : `${emoji.DEGRADED} ALERTA — ${componente.nome} com DEGRADAÇÃO`;
+      ? `${emoji.DOWN} ALERTA CRÍTICO — ${componente.provedor}: ${componente.nome} está FORA DO AR`
+      : `${emoji.DEGRADED} ALERTA — ${componente.provedor}: ${componente.nome} com DEGRADAÇÃO`;
 
   const payload = {
-    text: mencoes, // garante que a menção aparece como notificação push
+    text: mencoes,
     blocks: [
-      // Cabeçalho
       {
         type: 'header',
         text: { type: 'plain_text', text: titulo, emoji: true }
       },
-      // Menções + chamada de atenção
       {
         type: 'section',
         text: {
@@ -179,50 +210,42 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
         }
       },
       { type: 'divider' },
-      // Detalhes do incidente
       {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `*🏦 Componente:*
-\`${componente.nome}\``
+            text: `*🏢 Provedor:*\n\`${componente.provedor}\``
           },
           {
             type: 'mrkdwn',
-            text: `*📂 Grupo:*
-${grupo}`
+            text: `*🔧 Componente:*\n\`${componente.nome}\``
           },
           {
             type: 'mrkdwn',
-            text: `*⚠️ Problema:*
-${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*`
+            text: `*📂 Categoria:*\n${grupoDisplay}`
           },
           {
             type: 'mrkdwn',
-            text: `*📡 Status técnico:*
-\`${componente.status_original || statusNovo.toLowerCase()}\``
+            text: `*⚠️ Problema:*\n${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*`
           },
           {
             type: 'mrkdwn',
-            text: `*📅 Data:*
-${dataAgora}`
+            text: `*📡 Status técnico:*\n\`${componente.status_original || statusNovo.toLowerCase()}\``
           },
           {
             type: 'mrkdwn',
-            text: `*🕐 Hora:*
-${horaAgora}`
+            text: `*🕐 Detectado:*\n${horaAgora} de ${dataAgora}`
           }
         ]
       },
       { type: 'divider' },
-      // Rodapé
       {
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: `Pix Health Monitor · Okto Payments StatusPage · Detectado às ${horaAgora} de ${dataAgora}`
+            text: `Pix Health Monitor · Multi-Provider StatusPage · ${componente.provedor}`
           }
         ]
       }
@@ -231,17 +254,15 @@ ${horaAgora}`
 
   try {
     await axios.post(SLACK_WEBHOOK, payload, { timeout: 8000 });
-    console.log(`[Slack] Alerta enviado: ${componente.nome} | ${label[statusAnterior]} → ${label[statusNovo]}`);
+    console.log(`[Slack] Alerta enviado: ${componente.provedor}/${componente.nome} | ${label[statusAnterior]} → ${label[statusNovo]}`);
   } catch (e) {
     console.error('[Slack] Erro ao enviar alerta:', e.message);
   }
 }
 
-
 async function enviarEmail(componente, statusNovo, statusAnterior) {
   if (!ALERT_EMAIL_TO || !SMTP_HOST || !SMTP_USER || !SMTP_PASS) return;
 
-  // Nodemailer é carregado dinamicamente para não quebrar se não estiver instalado
   let nodemailer;
   try { nodemailer = require('nodemailer'); }
   catch (e) {
@@ -254,6 +275,11 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
   const hora      = new Date().toLocaleString('pt-BR');
   const isRecovery = statusNovo === 'UP';
   const cor       = statusNovo === 'DOWN' ? '#ff4d4d' : statusNovo === 'DEGRADED' ? '#f5c842' : '#1fd97a';
+
+  let grupoDisplay = componente.grupo || 'APIs & Infraestrutura';
+  if (componente.categoria === 'kyc') {
+    grupoDisplay = 'Processadoras KYC';
+  }
 
   const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
@@ -275,12 +301,16 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
 
       <table style="width:100%;border-collapse:collapse">
         <tr>
-          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20;width:40%">Componente</td>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20;width:40%">Provedor</td>
+          <td style="padding:10px 0;color:#f0f0f5;font-size:14px;font-weight:600;border-bottom:1px solid #1a1a20">${componente.provedor}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Componente</td>
           <td style="padding:10px 0;color:#f0f0f5;font-size:14px;font-weight:600;border-bottom:1px solid #1a1a20">${componente.nome}</td>
         </tr>
         <tr>
-          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Grupo</td>
-          <td style="padding:10px 0;color:#f0f0f5;font-size:14px;border-bottom:1px solid #1a1a20">${componente.grupo || 'APIs & Infra'}</td>
+          <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Categoria</td>
+          <td style="padding:10px 0;color:#f0f0f5;font-size:14px;border-bottom:1px solid #1a1a20">${grupoDisplay}</td>
         </tr>
         <tr>
           <td style="padding:10px 0;color:#4a4a5a;font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1a1a20">Mudança</td>
@@ -297,7 +327,7 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
       </table>
 
       <p style="color:#4a4a5a;font-size:11px;margin-top:24px;text-align:center">
-        Pix Health Monitor · Okto Payments StatusPage
+        Pix Health Monitor · Multi-Provider StatusPage
       </p>
     </div>
   `;
@@ -306,30 +336,27 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
     await transporter.sendMail({
       from:    `"Pix Health Monitor" <${ALERT_EMAIL_FROM || SMTP_USER}>`,
       to:      ALERT_EMAIL_TO,
-      subject: `${isRecovery ? '✅ Recuperado' : statusNovo === 'DOWN' ? '🔴 DOWN' : '🟡 Degradação'} — ${componente.nome}`,
+      subject: `${isRecovery ? '✅ Recuperado' : statusNovo === 'DOWN' ? '🔴 DOWN' : '🟡 Degradação'} — ${componente.provedor}: ${componente.nome}`,
       html
     });
-    console.log(`[Email] Alerta enviado para ${ALERT_EMAIL_TO}: ${componente.nome} → ${label}`);
+    console.log(`[Email] Alerta enviado para ${ALERT_EMAIL_TO}: ${componente.provedor}/${componente.nome} → ${label}`);
   } catch (e) {
     console.error('[Email] Erro ao enviar:', e.message);
   }
 }
 
-// Verifica mudanças de estado e dispara alertas
 async function verificarAlertas(componentes) {
   for (const c of componentes) {
     const anterior = estadoAnterior[c.id];
 
-    // Primeira execução: apenas registra o estado, não alerta
     if (anterior === undefined) {
       estadoAnterior[c.id] = c.status;
       continue;
     }
 
-    // Mudança de estado detectada
     if (anterior !== c.status) {
-      const deveAlertar = c.status !== 'UP' || anterior !== 'UP'; // alerta na ida E na volta
-      console.log(`[Alerta] ${c.nome}: ${anterior} → ${c.status}`);
+      const deveAlertar = c.status !== 'UP' || anterior !== 'UP';
+      console.log(`[Alerta] ${c.provedor}/${c.nome}: ${anterior} → ${c.status}`);
 
       if (deveAlertar) {
         await Promise.allSettled([
@@ -344,21 +371,29 @@ async function verificarAlertas(componentes) {
 }
 
 // ─────────────────────────────────────────────
-// CONSULTAR STATUSPAGE
+// CONSULTAR STATUSPAGE (COM RETRY)
 // ─────────────────────────────────────────────
 
-async function consultarStatusPage() {
+async function consultarStatusPage(apiConfig, tentativa = 1) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000;
+  
   try {
-    const inicio   = Date.now();
-    const response = await axios.get(STATUSPAGE_URL, { timeout: 30000 });
+    const inicio = Date.now();
+    console.log(`[${apiConfig.nome}] Tentativa ${tentativa}/${MAX_RETRIES}...`);
+    
+    const response = await axios.get(apiConfig.url, { timeout: 30000 });
     const latencia = Date.now() - inicio;
-    const data     = response.data;
+    
+    console.log(`[${apiConfig.nome}] ✓ Resposta em ${latencia}ms`);
 
-    const componentes = separarComponentes(data.components || []);
-    const geral       = data.status || {};
+    const data = response.data;
+    const componentes = separarComponentes(data.components || [], apiConfig.nome, apiConfig.categoria);
+    const geral = data.status || {};
 
     const incidentes = (data.incidents || []).map(i => ({
-      id:         i.id,
+      id:         `${apiConfig.nome}-${i.id}`,
+      provedor:   apiConfig.nome,
       nome:       i.name,
       status:     i.status,
       impacto:    i.impact,
@@ -372,7 +407,8 @@ async function consultarStatusPage() {
     }));
 
     const manutencoes = (data.scheduled_maintenances || []).map(m => ({
-      id:         m.id,
+      id:         `${apiConfig.nome}-${m.id}`,
+      provedor:   apiConfig.nome,
       nome:       m.name,
       status:     m.status,
       inicio:     m.scheduled_for,
@@ -380,25 +416,41 @@ async function consultarStatusPage() {
       atualizado: m.updated_at
     }));
 
-    return { componentes, geral, latencia, incidentes, manutencoes };
+    return { componentes, geral, latencia, incidentes, manutencoes, sucesso: true };
 
   } catch (erro) {
-    console.error('[StatusPage] Erro ao consultar:', erro.message);
+    const tipoErro = erro.code === 'ECONNABORTED' ? 'Timeout' : 
+                     erro.code === 'ENOTFOUND' ? 'DNS Error' :
+                     erro.response ? `HTTP ${erro.response.status}` : 'Network Error';
+    
+    console.error(`[${apiConfig.nome}] ✗ Falha na tentativa ${tentativa}/${MAX_RETRIES}: ${tipoErro}`);
+
+    if (tentativa < MAX_RETRIES) {
+      console.log(`[${apiConfig.nome}] ⏳ Aguardando ${RETRY_DELAY / 1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return consultarStatusPage(apiConfig, tentativa + 1);
+    }
+
+    console.error(`[${apiConfig.nome}] ✗ FALHA TOTAL após ${MAX_RETRIES} tentativas`);
+
     return {
       componentes: [{
-        id:              'statuspage-erro',
-        nome:            'StatusPage API',
+        id:              `${apiConfig.nome}-erro`,
+        nome:            `⚠️ Erro de Comunicação - ${apiConfig.nome}`,
+        provedor:        apiConfig.nome,
+        categoria:       apiConfig.categoria,
         grupo:           null,
-        status:          'DOWN',
-        status_original: 'erro',
-        label:           'DOWN',
-        descricao:       erro.message,
+        status:          'DEGRADED',
+        status_original: 'erro_comunicacao',
+        label:           'Erro de Comunicação',
+        descricao:       `Não foi possível conectar após ${MAX_RETRIES} tentativas (${tipoErro})`,
         atualizado_em:   new Date().toISOString(),
       }],
-      geral:       { indicator: 'critical', description: erro.message },
+      geral:       { indicator: 'minor', description: `Erro: ${tipoErro}` },
       latencia:    null,
       incidentes:  [],
-      manutencoes: []
+      manutencoes: [],
+      sucesso:     false
     };
   }
 }
@@ -408,35 +460,57 @@ async function consultarStatusPage() {
 // ─────────────────────────────────────────────
 
 async function monitorar() {
-  console.log('[Monitor] Consultando StatusPage Okto...');
+  console.log('\n' + '='.repeat(80));
+  console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} - Consultando todas as APIs...`);
+  console.log('='.repeat(80));
 
-  const { componentes, geral, latencia, incidentes, manutencoes } = await consultarStatusPage();
+  // Consulta todas as APIs em paralelo
+  const resultados = await Promise.all(
+    APIS_MONITORADAS.map(api => consultarStatusPage(api))
+  );
 
-  const nUp       = componentes.filter(c => c.status === 'UP').length;
-  const nDegraded = componentes.filter(c => c.status === 'DEGRADED').length;
-  const nDown     = componentes.filter(c => c.status === 'DOWN').length;
+  // Combina todos os componentes
+  const todosComponentes = resultados.flatMap(r => r.componentes);
+  const todosIncidentes = resultados.flatMap(r => r.incidentes);
+  const todasManutencoes = resultados.flatMap(r => r.manutencoes);
+
+  // Separa por categoria
+  const porCategoria = {
+    pagamentos: todosComponentes.filter(c => c.categoria === 'pagamentos'),
+    kyc: todosComponentes.filter(c => c.categoria === 'kyc')
+  };
+
+  const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
+  const nDegraded = todosComponentes.filter(c => c.status === 'DEGRADED').length;
+  const nDown     = todosComponentes.filter(c => c.status === 'DOWN').length;
 
   ultimosResultados = {
     timestamp:       new Date().toISOString(),
-    componentes,
-    geral,
-    incidentes,
-    manutencoes,
-    latencia_api_ms: latencia,
+    componentes:     todosComponentes,
+    por_categoria:   porCategoria,
+    geral:           { indicator: nDown > 0 ? 'critical' : nDegraded > 0 ? 'minor' : 'none' },
+    incidentes:      todosIncidentes,
+    manutencoes:     todasManutencoes,
     resumo: {
-      total:    componentes.length,
+      total:    todosComponentes.length,
       up:       nUp,
       degraded: nDegraded,
-      down:     nDown
+      down:     nDown,
+      por_provedor: APIS_MONITORADAS.map(api => ({
+        nome: api.nome,
+        componentes: todosComponentes.filter(c => c.provedor === api.nome).length
+      }))
     }
   };
 
   historicoDia.push({
     timestamp:   new Date().toISOString(),
     hora:        new Date().toLocaleTimeString('pt-BR'),
-    componentes: componentes.map(c => ({
+    componentes: todosComponentes.map(c => ({
       id:              c.id,
       nome:            c.nome,
+      provedor:        c.provedor,
+      categoria:       c.categoria,
       grupo:           c.grupo,
       status:          c.status,
       status_original: c.status_original
@@ -451,8 +525,7 @@ async function monitorar() {
     historicoDia = [];
   }
 
-  // Verifica mudanças e dispara alertas
-  await verificarAlertas(componentes);
+  await verificarAlertas(todosComponentes);
 
   const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
   clientesConectados.forEach(c => {
@@ -460,17 +533,20 @@ async function monitorar() {
   });
 
   try {
-    fs.appendFileSync('monitoramento_okto.log', JSON.stringify({
+    fs.appendFileSync('monitoramento_multiprovider.log', JSON.stringify({
       timestamp: ultimosResultados.timestamp,
-      resumo:    ultimosResultados.resumo,
-      geral:     ultimosResultados.geral
+      resumo:    ultimosResultados.resumo
     }) + '\n');
   } catch (e) {}
 
-  console.log(`[Monitor] Total: ${componentes.length} | UP: ${nUp} | DEGRADED: ${nDegraded} | DOWN: ${nDown} | API: ${latencia}ms`);
-  if (incidentes.length > 0) {
-    console.log(`[Monitor] Incidentes ativos: ${incidentes.map(i => i.nome).join(', ')}`);
+  console.log(`\n[Monitor] RESUMO GERAL:`);
+  console.log(`  Total: ${todosComponentes.length} | UP: ${nUp} | DEGRADED: ${nDegraded} | DOWN: ${nDown}`);
+  console.log(`  Pagamentos: ${porCategoria.pagamentos.length} componentes`);
+  console.log(`  KYC: ${porCategoria.kyc.length} componentes`);
+  if (todosIncidentes.length > 0) {
+    console.log(`  Incidentes ativos: ${todosIncidentes.length}`);
   }
+  console.log('='.repeat(80) + '\n');
 }
 
 // ─────────────────────────────────────────────
@@ -488,12 +564,13 @@ app.get('/api/health', (req, res) => {
     uptime_segundos:    Math.floor(process.uptime()),
     clientes_ws:        clientesConectados.length,
     historico_size:     historicoDia.length,
-    ultima_verificacao: ultimosResultados.timestamp || null
+    ultima_verificacao: ultimosResultados.timestamp || null,
+    apis_monitoradas:   APIS_MONITORADAS.map(a => ({ nome: a.nome, categoria: a.categoria }))
   });
 });
 
 app.get('/api/historico', (req, res) => {
-  const { inicio, fim, componente } = req.query;
+  const { inicio, fim, componente, provedor, categoria } = req.query;
   let dados = [...historicoDia];
 
   if (inicio && fim) {
@@ -503,6 +580,20 @@ app.get('/api/historico', (req, res) => {
       const horaFim    = parseInt(fim);
       return hora >= horaInicio && hora <= horaFim;
     });
+  }
+
+  if (provedor) {
+    dados = dados.map(item => ({
+      ...item,
+      componentes: item.componentes.filter(c => c.provedor === provedor)
+    }));
+  }
+
+  if (categoria) {
+    dados = dados.map(item => ({
+      ...item,
+      componentes: item.componentes.filter(c => c.categoria === categoria)
+    }));
   }
 
   if (componente) {
@@ -528,19 +619,19 @@ app.get('/api/historico/exportar', (req, res) => {
   }
 
   const dataHoje  = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
-  const cabecalho = ['data', 'hora', 'componente_id', 'componente_nome', 'grupo', 'status', 'status_original'].join(';');
+  const cabecalho = ['data', 'hora', 'provedor', 'categoria', 'componente_id', 'componente_nome', 'grupo', 'status', 'status_original'].join(';');
   const linhas    = [];
 
   historicoDia.forEach(item => {
     const data = new Date(item.timestamp).toLocaleDateString('pt-BR');
     const hora = item.hora || new Date(item.timestamp).toLocaleTimeString('pt-BR');
     item.componentes.forEach(c => {
-      linhas.push([data, hora, c.id, c.nome, c.grupo || '', c.status, c.status_original].join(';'));
+      linhas.push([data, hora, c.provedor, c.categoria, c.id, c.nome, c.grupo || '', c.status, c.status_original].join(';'));
     });
   });
 
   const csv         = '\uFEFF' + cabecalho + '\n' + linhas.join('\n');
-  const nomeArquivo = `relatorio_okto_${dataHoje}.csv`;
+  const nomeArquivo = `relatorio_multiprovider_${dataHoje}.csv`;
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
@@ -562,7 +653,7 @@ app.get('/api/oscilacoes', (req, res) => {
     item.componentes.forEach(c => {
       if (c.status !== 'UP') {
         porHora[hora].incidentes++;
-        porHora[hora].componentesAfetados.add(c.nome);
+        porHora[hora].componentesAfetados.add(`${c.provedor}/${c.nome}`);
       }
     });
   });
@@ -608,12 +699,15 @@ function iniciarKeepAlive() {
 
 server.listen(PORTA, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(60));
-  console.log('Pix Health Monitor');
+  console.log('Pix Health Monitor - Multi-Provider');
   console.log('='.repeat(60));
   console.log(`Servidor:   http://0.0.0.0:${PORTA}`);
-  console.log(`StatusPage: ${STATUSPAGE_URL}`);
   console.log(`Intervalo:  ${INTERVALO_SEGUNDOS}s`);
-  console.log(`Ignorados:  ${IGNORADOS.join(' | ')}`);
+  console.log(`\nAPIs Monitoradas:`);
+  APIS_MONITORADAS.forEach(api => {
+    console.log(`  • ${api.nome} (${api.categoria})`);
+  });
+  console.log(`\nIgnorados:  ${IGNORADOS.join(' | ')}`);
   console.log(`Slack:      ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
   console.log(`Email:      ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
   console.log('='.repeat(60) + '\n');
