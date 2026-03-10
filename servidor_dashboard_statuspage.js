@@ -27,17 +27,17 @@ const APIS_MONITORADAS = [
   },
   {
     nome: 'Legitimuz',
-    url: 'https://legitimuz.statuspage.io/api/v2/summary.json',
+    url: 'https://legitimuz.statuspage.io/api/v2/status.json',
     categoria: 'kyc'
   },
   {
     nome: 'AllowMe',
-    url: 'https://status.allowme.com.br/api/v2/summary.json',
+    url: 'https://status.allowme.com.br/api/v2/status.json',
     categoria: 'kyc'
   },
   {
     nome: 'Unico',
-    url: 'https://status.unico.io/api/v2/summary.json',
+    url: 'https://status.unico.io/api/v2/status.json',
     categoria: 'kyc'
   }
 ];
@@ -298,3 +298,4 @@ server.listen(PORTA, '0.0.0.0', () => {
   );
 
 });
+
