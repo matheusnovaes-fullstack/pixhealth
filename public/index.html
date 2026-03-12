@@ -574,14 +574,13 @@
     }
 
     function criarCard(c) {
-      if (c.categoria === 'infraestrutura') return criarCardCloudflare(c);
+      if (c.categoria === 'infraestrutura') return criarCardInfra(c);
       return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
     }
 
-    // ── Card Cloudflare ──
-    // Igual ao da Okto: se há incidente ativo fica amarelo mesmo com componente UP
-    // Tem botão de log que abre o modal com histórico de updates
-    function criarCardCloudflare(c) {
+    // ── Card de Infraestrutura (Cloudflare + AWS) ──
+    // Comportamento idêntico: incidente ativo → amarelo/vermelho + aviso inline + botão de log
+    function criarCardInfra(c) {
       const att = fmt(c.atualizado_em);
 
       // Incidente ativo vinculado a este card
@@ -647,7 +646,7 @@
             </div>
             <div class="card-divider"></div>
             <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="cloud"></i>Infraestrutura</div>
+              <div class="card-meta-item"><i data-lucide="cloud"></i>${c.provedor}</div>
               <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
             </div>
             ${detalhesHtml}
