@@ -30,6 +30,9 @@
       --purple:    #a78bfa;
       --purple-dim:#120d2a;
       --purple-bd: #2d1f5e;
+      --orange:    #f97316;
+      --orange-dim:#1a0c00;
+      --orange-bd: #7c3a00;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -123,9 +126,7 @@
     }
 
     /* ─── TABS CATEGORIA ─── */
-    .tabs {
-      display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
-    }
+    .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
     .tab {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
@@ -133,7 +134,7 @@
       background: var(--bg); color: var(--muted); transition: all 0.2s;
     }
     .tab svg { width: 11px; height: 11px; }
-    .tab:hover { border-color: var(--border-md); color: var(--text); }
+    .tab:hover { color: var(--text); }
     .tab.ativo { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
     .tab-count {
       display: inline-flex; align-items: center; justify-content: center;
@@ -163,10 +164,10 @@
       border: 1px solid; transition: all 0.2s;
     }
     .btn svg { width: 13px; height: 13px; }
-    .btn-green  { background: var(--green-dim); color: var(--green); border-color: var(--green-bd); }
-    .btn-green:hover  { background: var(--green-bd); }
-    .btn-blue   { background: var(--blue-dim);  color: var(--blue);  border-color: var(--blue-bd); }
-    .btn-blue:hover   { background: var(--blue-bd); }
+    .btn-green { background: var(--green-dim); color: var(--green); border-color: var(--green-bd); }
+    .btn-green:hover { background: var(--green-bd); }
+    .btn-blue  { background: var(--blue-dim);  color: var(--blue);  border-color: var(--blue-bd); }
+    .btn-blue:hover  { background: var(--blue-bd); }
     #export-fb { font-size: 11px; color: var(--green); display: none; }
 
     /* ─── GRÁFICOS ─── */
@@ -198,6 +199,7 @@
     .badge-degraded { background: var(--yellow-dim); color: var(--yellow); }
     .badge-down     { background: var(--red-dim);    color: var(--red); }
 
+    /* Tags de categoria */
     .cat-tag {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 2px 8px; border-radius: 4px;
@@ -205,8 +207,9 @@
       background: var(--faint); border: 1px solid var(--border-md);
     }
     .cat-tag svg { width: 9px; height: 9px; }
-    .cat-tag.pagamentos { background: var(--blue-dim);   border-color: var(--blue-bd);   color: var(--blue); }
-    .cat-tag.kyc        { background: var(--purple-dim); border-color: var(--purple-bd); color: var(--purple); }
+    .cat-tag.pagamentos    { background: var(--blue-dim);   border-color: var(--blue-bd);   color: var(--blue); }
+    .cat-tag.kyc           { background: var(--purple-dim); border-color: var(--purple-bd); color: var(--purple); }
+    .cat-tag.infraestrutura{ background: var(--orange-dim); border-color: var(--orange-bd); color: var(--orange); }
 
     .grupo-tag {
       display: inline-flex; align-items: center; gap: 4px;
@@ -216,20 +219,18 @@
     }
     .grupo-tag svg { width: 9px; height: 9px; }
 
-    /* KYC detalhes expandidos na tabela */
-    .kyc-detalhes {
-      margin-top: 6px; display: flex; flex-direction: column; gap: 4px;
-    }
-    .kyc-det-item {
+    /* Detalhes expandidos na tabela */
+    .det-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .det-item {
       display: flex; align-items: flex-start; gap: 6px;
       font-size: 11px; color: var(--muted);
       padding: 4px 8px; background: var(--bg); border-radius: 5px;
       border-left: 2px solid var(--border-md);
     }
-    .kyc-det-item.det-down     { border-left-color: var(--red); }
-    .kyc-det-item.det-degraded { border-left-color: var(--yellow); }
-    .kyc-det-name { color: var(--text); font-weight: 600; min-width: 120px; }
-    .kyc-det-motivo { color: var(--muted); }
+    .det-item.det-down     { border-left-color: var(--red); }
+    .det-item.det-degraded { border-left-color: var(--yellow); }
+    .det-name   { color: var(--text); font-weight: 600; min-width: 120px; }
+    .det-motivo { color: var(--muted); }
 
     .loading-td { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
     .ver-mais-wrap { text-align: center; margin-top: 14px; }
@@ -298,7 +299,6 @@
     <div class="panel">
       <div class="sec-title"><i data-lucide="sliders"></i> Filtros</div>
 
-      <!-- Tabs de categoria -->
       <div class="tabs">
         <button class="tab ativo" data-cat="" onclick="selecionarCategoria(this, '')">
           <i data-lucide="layout-grid"></i> Todos
@@ -311,6 +311,10 @@
         <button class="tab" data-cat="kyc" onclick="selecionarCategoria(this, 'kyc')">
           <i data-lucide="shield-check"></i> Processadoras KYC
           <span class="tab-count" id="tc-kyc">—</span>
+        </button>
+        <button class="tab" data-cat="infraestrutura" onclick="selecionarCategoria(this, 'infraestrutura')">
+          <i data-lucide="cloud"></i> Infraestrutura
+          <span class="tab-count" id="tc-infra">—</span>
         </button>
       </div>
 
@@ -393,66 +397,26 @@
       }
     };
 
-    // ── Normaliza dados: aceita tanto "componentes" legado quanto "componentes_dashboard" ──
-    // Para KYC agregado: usa o card direto (1 entrada por processadora)
-    // Para Okto: usa cada componente individual
-    function normalizarComponentes(snapshot) {
-      // Prefere componentes_dashboard se disponível (novo formato)
-      const lista = snapshot.componentes_dashboard || snapshot.componentes || [];
-
-      return lista.map(c => {
-        // Card agregado KYC
-        if (c.agregado) {
-          return {
-            id:        c.id,
-            nome:      c.nome,
-            provedor:  c.provedor,
-            categoria: c.categoria || 'kyc',
-            grupo:     null,
-            status:    c.status,
-            original:  c.status.toLowerCase(),
-            agregado:  true,
-            detalhes:  c.detalhes || [],   // serviços afetados quando há problema
-            mensagem:  c.mensagem || ''
-          };
-        }
-        // Componente individual (Okto)
-        return {
-          id:        c.id,
-          nome:      c.nome,
-          provedor:  c.provedor,
-          categoria: c.categoria || 'pagamentos',
-          grupo:     c.grupo || null,
-          status:    c.status,
-          original:  c.status_original || c.status,
-          agregado:  false,
-          detalhes:  [],
-          mensagem:  ''
-        };
-      });
-    }
-
     async function init() {
       await Promise.all([carregarComponentes(), carregarHistorico()]);
     }
 
-    // ── Popula o select de componentes usando componentes_dashboard ──
+    // ── Popula o select usando componentes_dashboard ──
     async function carregarComponentes() {
       try {
-        const d = await fetch('/api/status').then(r => r.json());
-
-        // Usa componentes_dashboard — contém os cards reais da tela
+        const d   = await fetch('/api/status').then(r => r.json());
         const lista = d.componentes_dashboard || d.componentes || [];
         const sel   = document.getElementById('filtro-componente');
 
-        // Grupos separados para melhor UX
-        const pagamentos = lista.filter(c => c.categoria === 'pagamentos');
-        const kyc        = lista.filter(c => c.categoria === 'kyc');
+        const pagamentos    = lista.filter(c => c.categoria === 'pagamentos');
+        const kyc           = lista.filter(c => c.categoria === 'kyc');
+        const infraestrutura= lista.filter(c => c.categoria === 'infraestrutura');
 
-        if (pagamentos.length) {
+        function addGroup(label, items) {
+          if (!items.length) return;
           const grp = document.createElement('optgroup');
-          grp.label = '🏦 Instituições Financeiras';
-          pagamentos.forEach(c => {
+          grp.label = label;
+          items.forEach(c => {
             const o = document.createElement('option');
             o.value = c.id; o.textContent = c.nome;
             grp.appendChild(o);
@@ -460,22 +424,14 @@
           sel.appendChild(grp);
         }
 
-        if (kyc.length) {
-          const grp = document.createElement('optgroup');
-          grp.label = '🛡️ Processadoras KYC';
-          kyc.forEach(c => {
-            const o = document.createElement('option');
-            // Para KYC agregado, filtra pelo provedor/nome
-            o.value = c.id; o.textContent = c.nome;
-            grp.appendChild(o);
-          });
-          sel.appendChild(grp);
-        }
+        addGroup('🏦 Instituições Financeiras', pagamentos);
+        addGroup('🛡️ Processadoras KYC',       kyc);
+        addGroup('☁️ Infraestrutura',           infraestrutura);
 
-        // Contadores dos tabs
-        document.getElementById('tc-todos').textContent      = lista.length;
+        document.getElementById('tc-todos').textContent    = lista.length;
         document.getElementById('tc-pagamentos').textContent = pagamentos.length;
-        document.getElementById('tc-kyc').textContent        = kyc.length;
+        document.getElementById('tc-kyc').textContent      = kyc.length;
+        document.getElementById('tc-infra').textContent    = infraestrutura.length;
 
       } catch(e) { console.error(e); }
     }
@@ -490,8 +446,6 @@
 
     async function carregarHistorico(params = '') {
       try {
-        // Busca o histórico — que salva componentes individuais internos
-        // mas também precisamos dos snapshots para reconstruir os cards agregados
         const [hist, status] = await Promise.all([
           fetch('/api/historico' + params).then(r => r.json()),
           fetch('/api/status').then(r => r.json())
@@ -499,83 +453,100 @@
 
         document.getElementById('ultimaAtt').textContent = new Date().toLocaleTimeString('pt-BR');
 
-        // O histórico salva componentes individuais; precisamos reconstruir
-        // os cards de KYC agregados para exibição
         const dados = hist.dados || [];
-
-        // Descobre quais provedores são KYC (do status atual)
         const lista = status.componentes_dashboard || status.componentes || [];
-        const kycProvedores = new Set(
-          lista.filter(c => c.categoria === 'kyc').map(c => c.nome || c.provedor)
-        );
 
-        // Reconstrói dados com cards KYC agregados por snapshot
-        const dadosNormalizados = dados.map(snapshot => {
+        // Provedores conhecidos por categoria
+        const kycProvedores   = new Set(lista.filter(c => c.categoria === 'kyc').map(c => c.nome || c.provedor));
+        const infraProvedores = new Set(lista.filter(c => c.categoria === 'infraestrutura').map(c => c.nome || c.provedor));
+
+        // Reconstrói snapshots com cards agregados corretos
+        const dadosNorm = dados.map(snapshot => {
           const comps = snapshot.componentes || [];
 
-          // Componentes Okto (pagamentos) — mantém individuais
+          // Okto: mantém individual
           const okto = comps.filter(c => c.categoria === 'pagamentos');
 
-          // Componentes KYC — agrupa por provedor e cria 1 card por provedor
-          const kycPorProvedor = {};
+          // KYC: 1 card por provedor
+          const kycPorProv = {};
           comps.filter(c => c.categoria === 'kyc').forEach(c => {
-            if (!kycPorProvedor[c.provedor]) kycPorProvedor[c.provedor] = [];
-            kycPorProvedor[c.provedor].push(c);
+            if (!kycPorProv[c.provedor]) kycPorProv[c.provedor] = [];
+            kycPorProv[c.provedor].push(c);
           });
-
-          const kycCards = Object.entries(kycPorProvedor).map(([provedor, items]) => {
-            const down     = items.filter(i => i.status === 'DOWN');
-            const degraded = items.filter(i => i.status === 'DEGRADED');
-            const afetados = [...down, ...degraded];
-
-            let statusGeral = 'UP';
-            if (down.length > 0)     statusGeral = 'DOWN';
-            else if (degraded.length > 0) statusGeral = 'DEGRADED';
-
+          const kycCards = Object.entries(kycPorProv).map(([prov, items]) => {
+            const down = items.filter(i => i.status === 'DOWN');
+            const deg  = items.filter(i => i.status === 'DEGRADED');
+            const af   = [...down, ...deg];
+            let st = 'UP';
+            if (down.length) st = 'DOWN';
+            else if (deg.length) st = 'DEGRADED';
             return {
-              id:        `agregado-${provedor}`,
-              nome:      provedor,
-              provedor:  provedor,
-              categoria: 'kyc',
-              grupo:     null,
-              status:    statusGeral,
-              original:  statusGeral.toLowerCase(),
-              agregado:  true,
-              detalhes:  afetados.map(i => ({
-                nome:   i.nome,
+              id: `agregado-${prov}`, nome: prov, provedor: prov,
+              categoria: 'kyc', grupo: null, status: st,
+              original: st.toLowerCase(), agregado: true,
+              detalhes: af.map(i => ({
+                nome: i.nome,
                 status: i.status === 'DOWN' ? 'DOWN' : 'DEGRADAÇÃO',
                 motivo: i.descricao || `Instabilidade (${i.status_original || i.status})`
               })),
-              mensagem: afetados.length === 0
-                ? 'Todos os serviços operacionais'
-                : `${afetados.length} serviço(s) afetado(s)`
+              mensagem: af.length === 0 ? 'Todos os serviços operacionais' : `${af.length} serviço(s) afetado(s)`
             };
           });
-
-          // Se não há dados KYC no histórico (provedor novo), usa os do status atual
+          // Preenche KYC sem dados
           kycProvedores.forEach(prov => {
-            if (!kycPorProvedor[prov]) {
-              kycCards.push({
-                id: `agregado-${prov}`, nome: prov, provedor: prov,
-                categoria: 'kyc', grupo: null, status: 'UP',
-                original: 'operational', agregado: true, detalhes: [],
-                mensagem: 'Sem dados históricos'
-              });
-            }
+            if (!kycPorProv[prov]) kycCards.push({
+              id: `agregado-${prov}`, nome: prov, provedor: prov,
+              categoria: 'kyc', grupo: null, status: 'UP',
+              original: 'operational', agregado: true, detalhes: [],
+              mensagem: 'Sem dados históricos'
+            });
+          });
+
+          // Infraestrutura (Cloudflare): 1 card, status vem do componente interno salvo
+          // O histórico salva apenas 'Cloudflare-geral' com status UP/DEGRADED/DOWN
+          const infraComps = comps.filter(c => c.categoria === 'infraestrutura');
+          const infraCards = [];
+          const infraPorProv = {};
+          infraComps.forEach(c => {
+            if (!infraPorProv[c.provedor]) infraPorProv[c.provedor] = [];
+            infraPorProv[c.provedor].push(c);
+          });
+          Object.entries(infraPorProv).forEach(([prov, items]) => {
+            // Pega o pior status entre os componentes internos salvos
+            const hasDown = items.some(i => i.status === 'DOWN');
+            const hasDeg  = items.some(i => i.status === 'DEGRADED');
+            const st = hasDown ? 'DOWN' : hasDeg ? 'DEGRADED' : 'UP';
+            const descricao = items.find(i => i.status !== 'UP')?.descricao || '';
+            infraCards.push({
+              id: `agregado-${prov}`, nome: prov, provedor: prov,
+              categoria: 'infraestrutura', grupo: null, status: st,
+              original: st.toLowerCase(), agregado: true,
+              detalhes: [],
+              mensagem: st === 'UP' ? 'Nenhum incidente ativo' : (descricao || 'Incidente reportado')
+            });
+          });
+          // Preenche infra sem dados
+          infraProvedores.forEach(prov => {
+            if (!infraPorProv[prov]) infraCards.push({
+              id: `agregado-${prov}`, nome: prov, provedor: prov,
+              categoria: 'infraestrutura', grupo: null, status: 'UP',
+              original: 'operational', agregado: true, detalhes: [],
+              mensagem: 'Sem dados históricos'
+            });
           });
 
           return {
-            timestamp:  snapshot.timestamp,
-            hora:       snapshot.hora,
-            componentes: [...okto, ...kycCards]
+            timestamp:   snapshot.timestamp,
+            hora:        snapshot.hora,
+            componentes: [...okto, ...kycCards, ...infraCards]
           };
         });
 
-        calcResumo(dadosNormalizados);
-        calcDestaque(dadosNormalizados);
-        renderDisp(dadosNormalizados);
-        renderInc(dadosNormalizados);
-        renderTabela(dadosNormalizados);
+        calcResumo(dadosNorm);
+        calcDestaque(dadosNorm);
+        renderDisp(dadosNorm);
+        renderInc(dadosNorm);
+        renderTabela(dadosNorm);
         lucide.createIcons();
 
       } catch(e) { console.error(e); }
@@ -584,7 +555,7 @@
     function calcResumo(dados) {
       let up = 0, deg = 0, down = 0;
       dados.forEach(i => (i.componentes || []).forEach(c => {
-        if (c.status === 'UP')       up++;
+        if (c.status === 'UP')           up++;
         else if (c.status === 'DEGRADED') deg++;
         else if (c.status === 'DOWN')     down++;
       }));
@@ -597,7 +568,6 @@
     function calcDestaque(dados) {
       const el = document.getElementById('destaqueGrid');
       if (!dados.length) { el.innerHTML = '<div class="loading-td">Aguardando dados...</div>'; return; }
-
       const porHora = {};
       dados.forEach(item => {
         const h = (item.hora || '').substring(0, 5);
@@ -606,9 +576,7 @@
           if (c.status !== 'UP') { porHora[h].inc++; porHora[h].afetados.add(c.nome); }
         });
       });
-
-      const entries = Object.entries(porHora).sort((a, b) => b[1].inc - a[1].inc);
-      const [hora, info] = entries[0] || [];
+      const [hora, info] = Object.entries(porHora).sort((a,b) => b[1].inc - a[1].inc)[0] || [];
       if (!hora || info.inc === 0) {
         el.innerHTML = `<div class="d-item" style="border-left-color:var(--green)"><label>Status</label><value style="color:var(--green);font-size:14px">Nenhum incidente no dia</value></div>`;
         return;
@@ -620,8 +588,7 @@
         <div class="d-item" style="grid-column:span 2">
           <label>Afetados</label>
           <value style="font-size:13px;line-height:1.6">${[...info.afetados].join(', ')}</value>
-        </div>
-      `;
+        </div>`;
     }
 
     function filtrarPorCategoria(comps) {
@@ -631,15 +598,15 @@
 
     function renderDisp(dados) {
       const ctx = document.getElementById('g-disp');
-      const ph  = {};
+      const ph = {};
       dados.forEach(i => {
-        const h    = (i.hora || '').substring(0, 5);
+        const h = (i.hora || '').substring(0, 5);
         const comp = filtrarPorCategoria(i.componentes || []);
         if (!ph[h]) ph[h] = { up: 0, t: 0 };
         comp.forEach(c => { ph[h].t++; if (c.status === 'UP') ph[h].up++; });
       });
       const labels = Object.keys(ph).sort();
-      const vals   = labels.map(h => ph[h].t > 0 ? ((ph[h].up / ph[h].t) * 100).toFixed(1) : 100);
+      const vals = labels.map(h => ph[h].t > 0 ? ((ph[h].up / ph[h].t) * 100).toFixed(1) : 100);
       if (gDisp) gDisp.destroy();
       gDisp = new Chart(ctx, {
         type: 'line',
@@ -650,9 +617,9 @@
 
     function renderInc(dados) {
       const ctx = document.getElementById('g-inc');
-      const ph  = {};
+      const ph = {};
       dados.forEach(i => {
-        const h    = (i.hora || '').substring(0, 5);
+        const h = (i.hora || '').substring(0, 5);
         const comp = filtrarPorCategoria(i.componentes || []);
         if (!ph[h]) ph[h] = { d: 0, dn: 0 };
         comp.forEach(c => {
@@ -674,48 +641,56 @@
 
     function badgeHtml(status) {
       const ic = status === 'UP' ? 'check-circle' : status === 'DEGRADED' ? 'alert-triangle' : 'x-circle';
-      const lb = status === 'UP' ? 'OPERACIONAL' : status === 'DEGRADED' ? 'DEGRADAÇÃO' : 'DOWN';
+      const lb = status === 'UP' ? 'OPERACIONAL'  : status === 'DEGRADED' ? 'DEGRADAÇÃO'    : 'DOWN';
       return `<span class="badge badge-${status.toLowerCase()}"><i data-lucide="${ic}"></i>${lb}</span>`;
     }
 
     function catTagHtml(categoria) {
-      if (categoria === 'pagamentos') {
-        return `<span class="cat-tag pagamentos"><i data-lucide="landmark"></i>Financeiro</span>`;
-      }
-      return `<span class="cat-tag kyc"><i data-lucide="shield-check"></i>KYC</span>`;
+      const mapa = {
+        pagamentos:     { icon: 'landmark',     label: 'Financeiro' },
+        kyc:            { icon: 'shield-check',  label: 'KYC' },
+        infraestrutura: { icon: 'cloud',         label: 'Infra' }
+      };
+      const { icon, label } = mapa[categoria] || { icon: 'layers', label: categoria };
+      return `<span class="cat-tag ${categoria}"><i data-lucide="${icon}"></i>${label}</span>`;
     }
 
-    // Linha da tabela — KYC agregado mostra detalhes dos serviços afetados inline
     function linhaHtml(r) {
       let detalheHtml = '';
 
       if (r.agregado && r.detalhes && r.detalhes.length > 0) {
-        // Mostra cada serviço afetado com seu status e motivo
         const itens = r.detalhes.map(d => {
-          const cls = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
           const badge = d.status === 'DOWN'
             ? `<span class="badge badge-down" style="font-size:9px;padding:1px 6px">DOWN</span>`
             : `<span class="badge badge-degraded" style="font-size:9px;padding:1px 6px">DEGRADAÇÃO</span>`;
-          return `<div class="kyc-det-item ${cls}">${badge}<span class="kyc-det-name">${d.nome}</span><span class="kyc-det-motivo">${d.motivo}</span></div>`;
+          return `<div class="det-item ${cls}">${badge}<span class="det-name">${d.nome}</span><span class="det-motivo">${d.motivo || ''}</span></div>`;
         }).join('');
-        detalheHtml = `<div class="kyc-detalhes">${itens}</div>`;
+        detalheHtml = `<div class="det-list">${itens}</div>`;
       } else if (r.agregado && r.status === 'UP') {
-        detalheHtml = `<span style="color:var(--muted);font-size:11px">Todos os serviços operacionais</span>`;
+        detalheHtml = `<span style="color:var(--muted);font-size:11px">${r.mensagem || 'Todos os serviços operacionais'}</span>`;
+      } else if (r.agregado && r.status !== 'UP') {
+        // Infraestrutura com incidente — mostra a mensagem do incidente
+        detalheHtml = `<span style="color:var(--yellow);font-size:11px">${r.mensagem || 'Incidente reportado'}</span>`;
       } else if (!r.agregado && r.grupo) {
         detalheHtml = `<span class="grupo-tag"><i data-lucide="folder"></i>${r.grupo}</span>`;
       } else {
         detalheHtml = `<span style="color:var(--muted)">—</span>`;
       }
 
+      // Label da categoria na coluna "Serviço"
+      const catLabel = r.categoria === 'kyc' ? ' <span style="font-size:10px;color:var(--muted)">(KYC)</span>'
+                     : r.categoria === 'infraestrutura' ? ' <span style="font-size:10px;color:var(--muted)">(Infra)</span>'
+                     : '';
+
       return `
         <tr>
           <td style="color:#888;font-variant-numeric:tabular-nums;white-space:nowrap">${r.hora}</td>
-          <td><strong style="color:var(--text)">${r.nome}</strong>${r.agregado ? ' <span style="font-size:10px;color:var(--muted)">(KYC)</span>' : ''}</td>
+          <td><strong style="color:var(--text)">${r.nome}</strong>${r.agregado ? catLabel : ''}</td>
           <td>${catTagHtml(r.categoria)}</td>
           <td>${badgeHtml(r.status)}</td>
           <td>${detalheHtml}</td>
-        </tr>
-      `;
+        </tr>`;
     }
 
     function renderTabela(dados) {
@@ -743,12 +718,10 @@
       const tb   = document.getElementById('tbody');
       const wrap = document.getElementById('verMaisWrap');
       const fatia = todos.slice(0, visiveis);
-
       if (!fatia.length) {
         tb.innerHTML = `<tr><td colspan="5" class="loading-td">Nenhum dado para o filtro selecionado.</td></tr>`;
         wrap.style.display = 'none'; return;
       }
-
       tb.innerHTML = fatia.map(linhaHtml).join('');
       wrap.style.display = visiveis < todos.length ? 'block' : 'none';
       lucide.createIcons();
@@ -763,8 +736,6 @@
       let p = '?';
       if (s) p += `inicio=${s}&`;
       if (e) p += `fim=${e}&`;
-      // Filtro de componente individual (apenas para Okto)
-      // Para KYC agregado, o filtro é feito client-side pela categoria
       if (c && !c.startsWith('agregado-')) p += `componente=${c}&`;
       carregarHistorico(p);
     }
