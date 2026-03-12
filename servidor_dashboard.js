@@ -510,37 +510,35 @@ async function consultarKYC(config) {
 }
 
 // ─────────────────────────────────────────────
-// CLOUDFLARE — CONSULTA EM 2 ETAPAS + INCIDENTES ATIVOS
+// CLOUDFLARE — BASEADO 100% EM INCIDENTS[]
 //
-// Etapa 1: status.json  → indicator geral
-// Etapa 2: summary.json → se não for UP → detalha serviços afetados
-//                       → sempre verifica incidents[] para log de incidentes
-//                         (igual à Okto: card pode ser verde mas ter incidente ativo)
+// Ignora componentes individuais (são centenas de países/regiões).
+// Status do card é determinado exclusivamente pelos incidents[]:
+//   • Sem incidente ativo  → card verde
+//   • Incidente ativo      → card amarelo/vermelho com log completo
 // ─────────────────────────────────────────────
 
 async function consultarCloudflare() {
-  const cfg = CLOUDFLARE_CONFIG;
-  console.log(`[Cloudflare] Consultando status.json...`);
+  console.log(`[Cloudflare] Consultando summary.json...`);
 
-  // ── Etapa 1: status geral ──
-  const { data: statusData, sucesso: statusOk, tipoErro: statusErro } =
-    await httpGet(cfg.urlStatus);
+  const { data, sucesso, tipoErro } = await httpGet(CLOUDFLARE_CONFIG.urlSummary);
 
-  if (!statusOk || !statusData) {
-    console.error(`[Cloudflare] ✗ status.json falhou: ${statusErro}`);
+  if (!sucesso || !data) {
+    console.error(`[Cloudflare] ✗ Falha: ${tipoErro}`);
     return {
       card: {
-        id:            'agregado-Cloudflare',
-        nome:          'Cloudflare',
-        provedor:      'Cloudflare',
-        categoria:     'infraestrutura',
-        status:        'DEGRADED',
-        label:         'DEGRADAÇÃO',
-        mensagem:      `Não foi possível verificar o status (${statusErro})`,
-        detalhes:      [],
-        incidente_ativo: false,
-        atualizado_em: new Date().toISOString(),
-        agregado:      true
+        id:              'agregado-Cloudflare',
+        nome:            'Cloudflare',
+        provedor:        'Cloudflare',
+        categoria:       'infraestrutura',
+        status:          'DEGRADED',
+        label:           'DEGRADAÇÃO',
+        mensagem:        `Não foi possível verificar o status (${tipoErro})`,
+        detalhes:        [],
+        incidente_ativo:  false,
+        incidentes_ativos: [],
+        atualizado_em:   new Date().toISOString(),
+        agregado:        true
       },
       componentesInternos: [],
       incidentes:          [],
@@ -549,147 +547,101 @@ async function consultarCloudflare() {
     };
   }
 
-  const indicator   = statusData.status?.indicator  || 'none';
-  const description = statusData.status?.description || '';
-  const statusGeral = mapearIndicator(indicator);
-  console.log(`[Cloudflare] ✓ indicator="${indicator}" → ${statusGeral}`);
-
-  // ── Etapa 2: sempre busca summary.json ──
-  // Precisamos dos incidents[] independente do status (para detectar incidentes ativos)
-  const { data: summaryData, sucesso: summaryOk } = await httpGet(cfg.urlSummary);
-
-  let detalhes            = [];
-  let componentesInternos = [];
-  let incidentes          = [];
-  let incidentesAtivos    = [];
-  let manutencoes         = [];
-  let mensagem            = statusGeral === 'UP' ? 'Todos os serviços operacionais' : (description || labelStatus(statusGeral));
-
-  if (summaryOk && summaryData) {
-    const rawComponents = summaryData.components || [];
-    const grupos = {};
-    rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
-
-    // Componentes individuais (para alertas internos)
-    componentesInternos = rawComponents
-      .filter(c => c.group === false)
-      .map(c => {
-        const st = mapearStatus(c.status);
-        return {
-          id:              `Cloudflare-${c.id}`,
-          nome:            c.name,
-          provedor:        'Cloudflare',
-          categoria:       'infraestrutura',
-          grupo:           c.group_id ? (grupos[c.group_id] || null) : null,
-          status:          st,
-          status_original: c.status,
-          label:           labelStatus(st),
-          descricao:       c.description || null,
-          atualizado_em:   c.updated_at  || new Date().toISOString()
-        };
-      });
-
-    // Serviços com problema → detalhes do card
-    const afetados = componentesInternos.filter(c => c.status !== 'UP');
-    if (statusGeral !== 'UP' && afetados.length > 0) {
-      const nDown = afetados.filter(c => c.status === 'DOWN').length;
-      const nDeg  = afetados.filter(c => c.status === 'DEGRADED').length;
-      if (nDown > 0 && nDeg > 0)      mensagem = `${nDown} serviço${nDown > 1 ? 's' : ''} fora do ar e ${nDeg} com degradação`;
-      else if (nDown > 0)              mensagem = `${nDown} serviço${nDown > 1 ? 's' : ''} fora do ar`;
-      else if (nDeg > 0)               mensagem = `${nDeg} serviço${nDeg > 1 ? 's' : ''} com degradação`;
-
-      detalhes = afetados.map(c => ({
-        nome:   c.nome,
-        status: c.label,
-        motivo: c.descricao && c.descricao.trim()
-                  ? c.descricao
-                  : `Instabilidade reportada na StatusPage (${c.status_original})`
-      }));
-    }
-
-    // Incidentes ativos (não resolved) — com histórico completo e componentes afetados
-    incidentesAtivos = (summaryData.incidents || [])
-      .filter(i => i.status !== 'resolved')
-      .map(i => ({
-        id:         `Cloudflare-${i.id}`,
-        provedor:   'Cloudflare',
-        nome:       i.name,
-        status:     i.status,
-        impacto:    i.impact,
-        atualizado: i.updated_at,
-        url:        i.shortlink || null,
-        afetados:   (i.components || []).map(c => c.name),
-        updates:    (i.incident_updates || []).map(u => ({
-          status:     u.status,
-          body:       u.body,
-          updated_at: u.updated_at
-        }))
-      }));
-
-    // Incidentes resolvidos recentes (para modal/histórico)
-    const incidentesResolvidos = (summaryData.incidents || [])
-      .filter(i => i.status === 'resolved')
-      .slice(0, 5)
-      .map(i => ({
-        id:         `Cloudflare-${i.id}`,
-        provedor:   'Cloudflare',
-        nome:       i.name,
-        status:     i.status,
-        impacto:    i.impact,
-        atualizado: i.updated_at,
-        url:        i.shortlink || null,
-        afetados:   (i.components || []).map(c => c.name),
-        updates:    (i.incident_updates || []).map(u => ({
-          status:     u.status,
-          body:       u.body,
-          updated_at: u.updated_at
-        }))
-      }));
-
-    incidentes = [...incidentesAtivos, ...incidentesResolvidos];
-
-    manutencoes = (summaryData.scheduled_maintenances || []).map(m => ({
-      id: `Cloudflare-${m.id}`, provedor: 'Cloudflare',
-      nome: m.name, status: m.status,
-      inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
+  // ── Incidentes ativos (não resolved) ──
+  const incidentesAtivos = (data.incidents || [])
+    .filter(i => i.status !== 'resolved')
+    .map(i => ({
+      id:         `Cloudflare-${i.id}`,
+      provedor:   'Cloudflare',
+      nome:       i.name,
+      status:     i.status,
+      impacto:    i.impact,
+      atualizado: i.updated_at,
+      url:        i.shortlink || null,
+      afetados:   (i.components || []).map(c => c.name),
+      updates:    (i.incident_updates || []).map(u => ({
+        status:     u.status,
+        body:       u.body,
+        updated_at: u.updated_at
+      }))
     }));
 
-    if (incidentesAtivos.length > 0) {
-      console.log(`[Cloudflare] ⚠️  ${incidentesAtivos.length} incidente(s) ativo(s):`);
-      incidentesAtivos.forEach(i => console.log(`  ↳ "${i.nome}" (${i.status}) — afeta: ${i.afetados.join(', ') || 'n/a'}`));
-    }
-  }
+  // ── Incidentes resolvidos recentes (para histórico/modal) ──
+  const incidentesResolvidos = (data.incidents || [])
+    .filter(i => i.status === 'resolved')
+    .slice(0, 5)
+    .map(i => ({
+      id:         `Cloudflare-${i.id}`,
+      provedor:   'Cloudflare',
+      nome:       i.name,
+      status:     i.status,
+      impacto:    i.impact,
+      atualizado: i.updated_at,
+      url:        i.shortlink || null,
+      afetados:   (i.components || []).map(c => c.name),
+      updates:    (i.incident_updates || []).map(u => ({
+        status:     u.status,
+        body:       u.body,
+        updated_at: u.updated_at
+      }))
+    }));
 
-  // Se há incidente ativo mas componente está UP, marca o card como warning
-  const temIncidenteAtivo = incidentesAtivos.length > 0;
-  const statusFinal = temIncidenteAtivo && statusGeral === 'UP' ? 'WARNING' : statusGeral;
+  const manutencoes = (data.scheduled_maintenances || []).map(m => ({
+    id: `Cloudflare-${m.id}`, provedor: 'Cloudflare',
+    nome: m.name, status: m.status,
+    inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
+  }));
 
-  // Mensagem quando tudo OK mas há incidente ativo monitorado
-  if (temIncidenteAtivo && statusGeral === 'UP') {
+  // ── Status do card determinado SOMENTE pelos incidentes ──
+  let statusGeral = 'UP';
+  let labelGeral  = 'OPERACIONAL';
+  let mensagem    = 'Nenhum incidente ativo';
+
+  if (incidentesAtivos.length > 0) {
     const inc = incidentesAtivos[0];
-    mensagem = `Incidente ativo: ${inc.nome}`;
+    // Determina severidade pelo campo impact do incidente
+    const isCritical = incidentesAtivos.some(i => i.impacto === 'critical' || i.impacto === 'major');
+    statusGeral = isCritical ? 'DOWN' : 'DEGRADED';
+    labelGeral  = isCritical ? 'DOWN' : 'DEGRADAÇÃO';
+    mensagem    = inc.nome;
+
+    console.log(`[Cloudflare] ⚠️  ${incidentesAtivos.length} incidente(s) ativo(s):`);
+    incidentesAtivos.forEach(i => console.log(`  ↳ "${i.nome}" [${i.status}] impact=${i.impacto}`));
+  } else {
+    console.log(`[Cloudflare] ✓ Nenhum incidente ativo`);
   }
 
-  console.log(`[Cloudflare] ✓ card: ${statusFinal} | incidentes ativos: ${incidentesAtivos.length}`);
+  // Componente interno único (para alertas e histórico)
+  const componentesInternos = [{
+    id:              'Cloudflare-geral',
+    nome:            'Cloudflare',
+    provedor:        'Cloudflare',
+    categoria:       'infraestrutura',
+    grupo:           null,
+    status:          statusGeral,
+    status_original: statusGeral.toLowerCase(),
+    label:           labelGeral,
+    descricao:       mensagem,
+    atualizado_em:   new Date().toISOString()
+  }];
 
   return {
     card: {
-      id:              'agregado-Cloudflare',
-      nome:            'Cloudflare',
-      provedor:        'Cloudflare',
-      categoria:       'infraestrutura',
-      status:          statusGeral,
-      status_display:  statusFinal,
-      label:           labelStatus(statusGeral),
+      id:               'agregado-Cloudflare',
+      nome:             'Cloudflare',
+      provedor:         'Cloudflare',
+      categoria:        'infraestrutura',
+      status:           statusGeral,
+      label:            labelGeral,
       mensagem,
-      detalhes,
-      incidente_ativo: temIncidenteAtivo,
-      incidentes_ativos: incidentesAtivos,   // para o frontend montar o botão de log
-      atualizado_em:   new Date().toISOString(),
-      agregado:        true
+      detalhes:         [],          // Não usamos detalhes de componentes — o log está nos incidents
+      incidente_ativo:  incidentesAtivos.length > 0,
+      incidentes_ativos: incidentesAtivos,
+      atualizado_em:    new Date().toISOString(),
+      agregado:         true
     },
     componentesInternos,
-    incidentes,
+    incidentes:       [...incidentesAtivos, ...incidentesResolvidos],
     incidentesAtivos,
     manutencoes
   };
