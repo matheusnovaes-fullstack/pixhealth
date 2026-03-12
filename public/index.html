@@ -386,6 +386,18 @@
       </div>
     </div>
 
+    <!-- Infraestrutura: Cloudflare -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon"><i data-lucide="cloud"></i></div>
+        <span class="section-title">Infraestrutura</span>
+        <span class="section-count" id="count-infra"></span>
+      </div>
+      <div class="cards-grid" id="grid-infra">
+        <div class="loading-grid">Carregando...</div>
+      </div>
+    </div>
+
     <!-- Instituições: 10 bancos da Okto (têm grupo) -->
     <div class="section">
       <div class="section-header">
@@ -562,7 +574,87 @@
     }
 
     function criarCard(c) {
+      if (c.categoria === 'infraestrutura') return criarCardCloudflare(c);
       return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
+    }
+
+    // ── Card Cloudflare ──
+    // Igual ao da Okto: se há incidente ativo fica amarelo mesmo com componente UP
+    // Tem botão de log que abre o modal com histórico de updates
+    function criarCardCloudflare(c) {
+      const att = fmt(c.atualizado_em);
+
+      // Incidente ativo vinculado a este card
+      const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
+        ? c.incidentes_ativos[0]
+        : incidentesAtivos.find(i =>
+            i.provedor === 'Cloudflare' && i.status !== 'resolved'
+          );
+
+      const temIncidente  = !!inc || c.incidente_ativo;
+      const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+      const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+      const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+
+      // Botão de log do incidente
+      const incParaModal = inc || incidentesAtivos.find(i => i.provedor === 'Cloudflare');
+      const btn = incParaModal
+        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+        : '';
+
+      // Aviso inline quando há incidente mas componente está UP
+      let incidenteInline = '';
+      if (inc && c.status === 'UP') {
+        const lastUpdate = inc.updates && inc.updates[0];
+        incidenteInline = `
+          <div class="inc-aviso">
+            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+          </div>`;
+      }
+
+      // Detalhes de serviços afetados quando status != UP
+      let detalhesHtml = '';
+      if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
+        const itens = c.detalhes.map(d => {
+          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
+          return `
+            <div class="kyc-det-item ${cls}">
+              <div class="kyc-det-row">
+                <span class="kyc-det-nome">${d.nome}</span>
+                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
+              </div>
+              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
+            </div>`;
+        }).join('');
+        detalhesHtml = `
+          <div class="kyc-detalhes">
+            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+            ${itens}
+          </div>`;
+      } else if (c.status === 'UP' && !temIncidente) {
+        detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
+      }
+
+      return `
+        <div class="comp-card ${statusFinal}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="cloud"></i>Infraestrutura</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+            </div>
+            ${detalhesHtml}
+            ${incidenteInline}
+            ${btn}
+          </div>
+        </div>`;
     }
 
     function render(dados) {
@@ -606,13 +698,20 @@
       `;
 
       // Separação das seções
-      const apis   = dashboard.filter(c => c.agregado || (c.categoria === 'pagamentos' && !c.grupo));
+      // APIs & Infra → KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit)
+      // Infraestrutura → Cloudflare
+      // Instituições → bancos Okto com grupo
+      const apis   = dashboard.filter(c => (c.agregado && c.categoria === 'kyc')
+                                        || (c.categoria === 'pagamentos' && !c.grupo));
+      const infra  = dashboard.filter(c => c.categoria === 'infraestrutura');
       const bancos = dashboard.filter(c => c.categoria === 'pagamentos' && c.grupo);
 
       document.getElementById('count-apis').textContent   = `${apis.length} componente${apis.length!==1?'s':''}`;
+      document.getElementById('count-infra').textContent  = `${infra.length} provedor${infra.length!==1?'es':''}`;
       document.getElementById('count-bancos').textContent = `${bancos.length} instituiç${bancos.length!==1?'ões':'ão'}`;
 
       document.getElementById('grid-apis').innerHTML   = apis.length   ? apis.map(criarCard).join('')   : '<div class="loading-grid">Nenhum dado</div>';
+      document.getElementById('grid-infra').innerHTML  = infra.length  ? infra.map(criarCard).join('')  : '<div class="loading-grid">Nenhum dado</div>';
       document.getElementById('grid-bancos').innerHTML = bancos.length ? bancos.map(criarCard).join('') : '<div class="loading-grid">Nenhum dado</div>';
 
       lucide.createIcons();
