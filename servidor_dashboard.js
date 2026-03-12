@@ -61,8 +61,8 @@ const IGNORADOS_OKTO = ['RTM', 'JD'];
 // CONFIGURAÇÃO DE ALERTAS
 // ─────────────────────────────────────────────
 
-const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK;
-const SLACK_MENTIONS = process.env.SLACK_MENTIONS ? process.env.SLACK_MENTIONS.split(',') : [];
+const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
+const SLACK_MENTIONS = ['U09G386SN01', 'U09BNJL6E2X', 'U09QSBQ7SEP'];
 
 const ALERT_EMAIL_TO   = process.env.ALERT_EMAIL_TO   || null;
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || null;
@@ -240,10 +240,60 @@ async function consultarOkto() {
       return (ord[a.status] ?? 2) - (ord[b.status] ?? 2);
     });
 
-  const incidentes = (data.incidents || []).map(i => ({
-    id: `Okto Payments-${i.id}`, provedor: 'Okto Payments',
-    nome: i.name, status: i.status, impacto: i.impact,
-    atualizado: i.updated_at, url: i.shortlink || null
+  // Incidentes ativos (qualquer status exceto resolved)
+  // Inclui updates[] completo e lista de componentes afetados
+  const incidentes = (data.incidents || [])
+    .filter(i => i.status !== 'resolved')
+    .map(i => {
+      // Nomes dos componentes afetados por este incidente
+      const afetados = (i.components || []).map(c => c.name);
+      return {
+        id:         `Okto Payments-${i.id}`,
+        provedor:   'Okto Payments',
+        nome:       i.name,
+        status:     i.status,
+        impacto:    i.impact,
+        atualizado: i.updated_at,
+        url:        i.shortlink || null,
+        afetados,   // nomes dos bancos/componentes afetados
+        updates:    (i.incident_updates || []).map(u => ({
+          status:     u.status,
+          body:       u.body,
+          updated_at: u.updated_at
+        }))
+      };
+    });
+
+  // Incidentes resolvidos recentes (últimas 24h) — para histórico/modal
+  const incidentesResolvidos = (data.incidents || [])
+    .filter(i => i.status === 'resolved')
+    .slice(0, 5)
+    .map(i => ({
+      id:         `Okto Payments-${i.id}`,
+      provedor:   'Okto Payments',
+      nome:       i.name,
+      status:     i.status,
+      impacto:    i.impact,
+      atualizado: i.updated_at,
+      url:        i.shortlink || null,
+      afetados:   (i.components || []).map(c => c.name),
+      updates:    (i.incident_updates || []).map(u => ({
+        status:     u.status,
+        body:       u.body,
+        updated_at: u.updated_at
+      }))
+    }));
+
+  // Marca componentes que têm incidente ativo (mesmo estando operational)
+  const nomesComIncidente = new Set(
+    incidentes.flatMap(i => i.afetados)
+  );
+
+  const componentesMarcados = componentes.map(c => ({
+    ...c,
+    incidente_ativo: nomesComIncidente.has(c.nome),
+    // Se tem incidente ativo mas componente está UP, mostra como WARNING
+    status_display: nomesComIncidente.has(c.nome) && c.status === 'UP' ? 'WARNING' : c.status
   }));
 
   const manutencoes = (data.scheduled_maintenances || []).map(m => ({
@@ -252,8 +302,18 @@ async function consultarOkto() {
     inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
   }));
 
-  console.log(`[Okto] ${componentes.length} cards individuais`);
-  return { componentes, incidentes, manutencoes };
+  if (incidentes.length > 0) {
+    console.log(`[Okto] ⚠️  ${incidentes.length} incidente(s) ativo(s):`);
+    incidentes.forEach(i => console.log(`  ↳ "${i.nome}" (${i.status}) — afeta: ${i.afetados.join(', ') || 'não especificado'}`));
+  }
+
+  console.log(`[Okto] ${componentesMarcados.length} cards individuais`);
+  return {
+    componentes:          componentesMarcados,
+    incidentes:           [...incidentes, ...incidentesResolvidos],
+    incidentesAtivos:     incidentes,
+    manutencoes
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -606,52 +666,89 @@ async function monitorar() {
   console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
   console.log('='.repeat(80));
 
-  // Consultas em paralelo
   const [oktoResult, ...kycResults] = await Promise.all([
     consultarOkto(),
     ...KYC_CONFIGS.map(c => consultarKYC(c))
   ]);
 
-  // ── Componentes internos (alertas + histórico) ──
   const componentesOkto  = oktoResult.componentes;
   const componentesKYC   = kycResults.flatMap(r => r.componentesInternos);
   const todosComponentes = [...componentesOkto, ...componentesKYC];
 
-  // ── Incidentes e manutenções ──
-  const todosIncidentes  = [...oktoResult.incidentes,  ...kycResults.flatMap(r => r.incidentes)];
-  const todasManutencoes = [...oktoResult.manutencoes, ...kycResults.flatMap(r => r.manutencoes)];
+  const todosIncidentes  = [...(oktoResult.incidentes  || []), ...kycResults.flatMap(r => r.incidentes  || [])];
+  const todasManutencoes = [...(oktoResult.manutencoes || []), ...kycResults.flatMap(r => r.manutencoes || [])];
 
-  // ── Dashboard: Okto individual + 1 card por KYC ──
+  // Incidentes ATIVOS (não resolved) — usados para destacar cards e alertar
+  const incidentesAtivosOkto = oktoResult.incidentesAtivos || [];
+
+  // Alerta Slack para novos incidentes ativos (mesmo com componente operational)
+  for (const inc of incidentesAtivosOkto) {
+    const chave = `incidente-${inc.id}`;
+    if (!estadoAnterior[chave]) {
+      estadoAnterior[chave] = inc.status;
+      // Primeiro ciclo: registra sem alertar
+      continue;
+    }
+    if (estadoAnterior[chave] !== inc.status) {
+      console.log(`[Incidente] Novo status: "${inc.nome}" → ${inc.status}`);
+      // Monta um objeto compatível com enviarSlack para notificar
+      const pseudo = {
+        id:              inc.id,
+        nome:            inc.nome,
+        provedor:        'Okto Payments',
+        categoria:       'pagamentos',
+        grupo:           null,
+        status:          inc.status === 'resolved' ? 'UP' : 'DEGRADED',
+        status_original: inc.status,
+        label:           inc.status === 'resolved' ? 'OPERACIONAL' : 'INCIDENTE ATIVO'
+      };
+      const statusPrev = estadoAnterior[chave] === 'resolved' ? 'UP' : 'DEGRADED';
+      await Promise.allSettled([
+        enviarSlack(pseudo, pseudo.status, statusPrev),
+        enviarEmail(pseudo, pseudo.status, statusPrev)
+      ]);
+      estadoAnterior[chave] = inc.status;
+    }
+  }
+
+  // Dashboard: Okto individual + 1 card por KYC
+  // Componentes com incidente_ativo=true ficam destacados mesmo estando operational
   const componentesDashboard = [
-    ...componentesOkto,                 // Cards individuais Okto
-    ...kycResults.map(r => r.card)      // 1 card por processadora KYC
+    ...componentesOkto,
+    ...kycResults.map(r => r.card)
   ];
 
-  const porCategoria = {
-    pagamentos: componentesOkto,
-    kyc:        componentesKYC
-  };
+  const porCategoria = { pagamentos: componentesOkto, kyc: componentesKYC };
 
   const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
   const nDegraded = todosComponentes.filter(c => c.status === 'DEGRADED').length;
   const nDown     = todosComponentes.filter(c => c.status === 'DOWN').length;
+  // Considera incidente ativo mesmo com tudo operational
+  const temIncidenteAtivo = incidentesAtivosOkto.length > 0;
 
   ultimosResultados = {
     timestamp:             new Date().toISOString(),
     componentes:           todosComponentes,
     componentes_dashboard: componentesDashboard,
     por_categoria:         porCategoria,
-    geral: { indicator: nDown > 0 ? 'critical' : nDegraded > 0 ? 'minor' : 'none' },
-    incidentes:            todosIncidentes,
-    manutencoes:           todasManutencoes,
+    geral: {
+      indicator: nDown > 0 ? 'critical'
+               : nDegraded > 0 ? 'minor'
+               : temIncidenteAtivo ? 'minor'   // incidente ativo = banner amarelo
+               : 'none'
+    },
+    incidentes:        todosIncidentes,
+    incidentes_ativos: incidentesAtivosOkto,   // para o frontend destacar cards
+    manutencoes:       todasManutencoes,
     resumo: {
-      total:           todosComponentes.length,
-      up:              nUp,
-      degraded:        nDegraded,
-      down:            nDown,
-      dashboard_cards: componentesDashboard.length,
-      okto_cards:      componentesOkto.length,
-      kyc_cards:       kycResults.length
+      total:             todosComponentes.length,
+      up:                nUp,
+      degraded:          nDegraded,
+      down:              nDown,
+      incidentes_ativos: incidentesAtivosOkto.length,
+      dashboard_cards:   componentesDashboard.length,
+      okto_cards:        componentesOkto.length,
+      kyc_cards:         kycResults.length
     }
   };
 
@@ -691,9 +788,12 @@ async function monitorar() {
   } catch (e) {}
 
   console.log(`\n[Monitor] RESUMO:`);
-  console.log(`  Cards dashboard : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC)`);
-  console.log(`  Status geral    : UP=${nUp} | DEGRADED=${nDegraded} | DOWN=${nDown}`);
-  if (todosIncidentes.length > 0) console.log(`  Incidentes      : ${todosIncidentes.length}`);
+  console.log(`  Cards dashboard   : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC)`);
+  console.log(`  Status geral      : UP=${nUp} | DEGRADED=${nDegraded} | DOWN=${nDown}`);
+  if (incidentesAtivosOkto.length > 0) {
+    console.log(`  Incidentes ativos : ${incidentesAtivosOkto.length}`);
+    incidentesAtivosOkto.forEach(i => console.log(`    ↳ "${i.nome}" [${i.status}] afeta: ${i.afetados.join(', ') || 'n/a'}`));
+  }
   console.log('='.repeat(80) + '\n');
 }
 
