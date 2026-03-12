@@ -417,8 +417,8 @@ async function consultarKYC(config) {
     const grupos = {};
     rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
 
-    // Todos os componentes individuais (para alertas internos)
-    componentesInternos = rawComponents
+    // Componentes individuais (para detalhes do card)
+    const todosIndividuais = rawComponents
       .filter(c => c.group === false)
       .map(c => {
         const st = mapearStatus(c.status);
@@ -437,7 +437,7 @@ async function consultarKYC(config) {
       });
 
     // Serviços com problema → aparecem nos detalhes do card
-    const afetados = componentesInternos.filter(c => c.status !== 'UP');
+    const afetados = todosIndividuais.filter(c => c.status !== 'UP');
     const nDown    = afetados.filter(c => c.status === 'DOWN').length;
     const nDeg     = afetados.filter(c => c.status === 'DEGRADED').length;
 
@@ -449,7 +449,6 @@ async function consultarKYC(config) {
       mensagem = `${nDeg} serviço${nDeg > 1 ? 's' : ''} com degradação`;
     }
 
-    // Detalha cada serviço afetado com nome e motivo
     detalhes = afetados.map(c => ({
       nome:   c.nome,
       status: c.label,
@@ -472,6 +471,22 @@ async function consultarKYC(config) {
 
     console.log(`[${config.nome}] ✓ ${afetados.length} serviço(s) afetado(s):`);
     afetados.forEach(c => console.log(`  ↳ ${c.nome}: ${c.label}`));
+
+    // IMPORTANTE: componente interno sempre usa ID fixo 'X-geral'
+    // Isso garante que o verificarAlertas rastreie corretamente a mudança
+    // de status entre ciclos (UP → DEGRADED → UP) usando sempre o mesmo ID.
+    // Os detalhes individuais ficam no card para exibição, não nos alertas.
+    componentesInternos = [{
+      id:              `${config.nome}-geral`,
+      nome:            config.nome,
+      provedor:        config.nome,
+      categoria:       'kyc',
+      status:          statusGeral,
+      status_original: indicator,
+      label:           labelStatus(statusGeral),
+      descricao:       mensagem,   // ex: "2 serviços com degradação"
+      atualizado_em:   new Date().toISOString()
+    }];
 
   } else {
     // summary.json indisponível — card com status geral sem detalhar serviços
@@ -657,14 +672,24 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
   const isRecovery   = statusNovo === 'UP';
   const horaAgora    = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dataAgora    = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const grupoDisplay = componente.categoria === 'kyc' ? 'Processadoras KYC' : (componente.grupo || 'APIs & Infraestrutura');
-  const mencoes      = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
+
+  const grupoDisplay =
+    componente.categoria === 'kyc'            ? 'Processadoras KYC'  :
+    componente.categoria === 'infraestrutura' ? 'Infraestrutura'     :
+    componente.grupo || 'APIs & Infraestrutura';
+
+  const mencoes = SLACK_MENTIONS.map(id => `<@${id}>`).join(' ');
 
   const titulo = isRecovery
     ? `${emoji.UP} Serviço Recuperado — ${componente.provedor}: ${componente.nome}`
     : statusNovo === 'DOWN'
       ? `${emoji.DOWN} ALERTA CRÍTICO — ${componente.provedor}: ${componente.nome} está FORA DO AR`
       : `${emoji.DEGRADED} ALERTA — ${componente.provedor}: ${componente.nome} com DEGRADAÇÃO`;
+
+  // Detalhes adicionais para KYC/Cloudflare (vem da descricao do componente interno)
+  const detalheExtra = !isRecovery && componente.descricao
+    ? `\n> ${componente.descricao}`
+    : '';
 
   const payload = {
     text: mencoes,
@@ -676,7 +701,7 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
           type: 'mrkdwn',
           text: isRecovery
             ? `${mencoes} — O serviço voltou ao normal. ✅`
-            : `${mencoes} — Atenção! Problema detectado no monitoramento Pix Health.`
+            : `${mencoes} — Atenção! Problema detectado no monitoramento Pix Health.${detalheExtra}`
         }
       },
       { type: 'divider' },
@@ -785,20 +810,41 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
 // Sempre sobre componentes individuais internos
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// VERIFICAR E DISPARAR ALERTAS
+// Cobre TODOS os componentes internos:
+//   • Okto    → cada banco/API individual
+//   • KYC     → componente 'X-geral' (status vem do indicator do status.json)
+//   • Cloudflare → componente 'Cloudflare-geral' (status vem dos incidents[])
+// ─────────────────────────────────────────────
+
 async function verificarAlertas(componentes) {
   for (const c of componentes) {
     const anterior = estadoAnterior[c.id];
 
     if (anterior === undefined) {
       estadoAnterior[c.id] = c.status;
+      console.log(`[Alerta] Registrado estado inicial: ${c.provedor}/${c.nome} → ${c.status}`);
       continue;
     }
 
     if (anterior !== c.status) {
-      console.log(`[Alerta] ${c.provedor}/${c.nome}: ${anterior} → ${c.status}`);
+      console.log(`[Alerta] MUDANÇA DETECTADA: ${c.provedor}/${c.nome}: ${anterior} → ${c.status}`);
+
+      // Enriquece a descrição para KYC e Cloudflare no alerta
+      const componenteEnriquecido = {
+        ...c,
+        // Para KYC/Cloudflare o grupo fica como a categoria legível
+        grupo: c.grupo || (
+          c.categoria === 'kyc'            ? 'Processadoras KYC' :
+          c.categoria === 'infraestrutura' ? 'Infraestrutura'    :
+          'APIs & Infraestrutura'
+        )
+      };
+
       await Promise.allSettled([
-        enviarSlack(c, c.status, anterior),
-        enviarEmail(c, c.status, anterior)
+        enviarSlack(componenteEnriquecido, c.status, anterior),
+        enviarEmail(componenteEnriquecido, c.status, anterior)
       ]);
       estadoAnterior[c.id] = c.status;
     }
