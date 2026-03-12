@@ -65,6 +65,16 @@ const CLOUDFLARE_CONFIG = {
   categoria:  'infraestrutura'
 };
 
+// AWS — infraestrutura crítica
+// Formato próprio: array de eventos ativos em data.json
+// status numérico: 0=resolvido 1=investigando 2=identificado 3=monitorando
+// Filtra apenas eventos com status > 0 (ativos)
+const AWS_CONFIG = {
+  nome: 'AWS',
+  url:  'https://status.aws.amazon.com/data.json',
+  categoria: 'infraestrutura'
+};
+
 // Componentes da Okto a ignorar
 const IGNORADOS_OKTO = ['RTM', 'JD'];
 
@@ -663,9 +673,151 @@ async function consultarCloudflare() {
 }
 
 // ─────────────────────────────────────────────
+// AWS — BASEADO 100% EM EVENTOS ATIVOS (data.json)
+//
+// Formato completamente diferente do statuspage.io:
+//   • Retorna array de eventos (não { status, components })
+//   • status numérico: 0=resolvido 1=investigando 2=identificado 3=monitorando
+//   • Filtra apenas eventos com status > 0 (ativos)
+//   • event_log[] = histórico de updates do incidente
+//   • 1 card único — mostra eventos ativos com serviço, região e descrição
 // ─────────────────────────────────────────────
 
-async function enviarSlack(componente, statusNovo, statusAnterior) {
+// Mapeia status numérico da AWS para texto legível
+function mapearStatusAWS(statusNum) {
+  switch (parseInt(statusNum)) {
+    case 1: return 'Investigando';
+    case 2: return 'Identificado';
+    case 3: return 'Monitorando';
+    case 0: return 'Resolvido';
+    default: return 'Investigando';
+  }
+}
+
+async function consultarAWS() {
+  console.log(`[AWS] Consultando data.json...`);
+
+  const { data, sucesso, tipoErro } = await httpGet(AWS_CONFIG.url);
+
+  if (!sucesso || !data) {
+    console.error(`[AWS] ✗ Falha: ${tipoErro}`);
+    return {
+      card: {
+        id:              'agregado-AWS',
+        nome:            'AWS',
+        provedor:        'AWS',
+        categoria:       'infraestrutura',
+        status:          'DEGRADED',
+        label:           'DEGRADAÇÃO',
+        mensagem:        `Não foi possível verificar o status (${tipoErro})`,
+        detalhes:        [],
+        incidente_ativo:  false,
+        incidentes_ativos: [],
+        atualizado_em:   new Date().toISOString(),
+        agregado:        true
+      },
+      componentesInternos: [],
+      incidentes:          [],
+      incidentesAtivos:    [],
+      manutencoes:         []
+    };
+  }
+
+  // data.json retorna um array de eventos
+  const eventos = Array.isArray(data) ? data : [];
+
+  // Eventos ATIVOS: status > 0 (0 = resolvido)
+  const eventosAtivos = eventos.filter(e => parseInt(e.status) > 0);
+
+  // Eventos recentes resolvidos (para histórico)
+  const eventosResolvidos = eventos
+    .filter(e => parseInt(e.status) === 0)
+    .slice(0, 5);
+
+  // Monta incidentes no formato padrão do sistema
+  function eventoParaIncidente(e) {
+    const logs = (e.event_log || []).slice().reverse(); // mais recente primeiro
+    return {
+      id:         `AWS-${e.arn || e.date}`,
+      provedor:   'AWS',
+      nome:       e.summary || e.service_name || 'Evento AWS',
+      status:     parseInt(e.status) === 0 ? 'resolved' : mapearStatusAWS(e.status).toLowerCase(),
+      impacto:    parseInt(e.status) === 1 ? 'major' : 'minor',
+      atualizado: e.date ? new Date(parseInt(e.date) * 1000).toISOString() : new Date().toISOString(),
+      url:        null,
+      afetados:   [`${e.service_name} (${e.region_name || 'Global'})`],
+      updates:    logs.map(l => ({
+        status:     mapearStatusAWS(l.status).toLowerCase(),
+        body:       l.message || l.summary || '',
+        updated_at: l.timestamp ? new Date(parseInt(l.timestamp) * 1000).toISOString() : null
+      }))
+    };
+  }
+
+  const incidentesAtivos    = eventosAtivos.map(eventoParaIncidente);
+  const incidentesResolvidos = eventosResolvidos.map(eventoParaIncidente);
+
+  // Status do card — baseado nos eventos ativos
+  let statusGeral = 'UP';
+  let labelGeral  = 'OPERACIONAL';
+  let mensagem    = 'Nenhum incidente ativo';
+
+  if (eventosAtivos.length > 0) {
+    const temCritico = eventosAtivos.some(e => parseInt(e.status) === 1);
+    statusGeral = temCritico ? 'DOWN' : 'DEGRADED';
+    labelGeral  = temCritico ? 'DOWN' : 'DEGRADAÇÃO';
+
+    // Lista serviços afetados únicos
+    const servicos = [...new Set(eventosAtivos.map(e =>
+      `${e.service_name}${e.region_name ? ` (${e.region_name})` : ''}`
+    ))];
+    mensagem = servicos.length === 1
+      ? servicos[0]
+      : `${eventosAtivos.length} evento(s) ativo(s): ${servicos.slice(0, 3).join(', ')}${servicos.length > 3 ? '...' : ''}`;
+
+    console.log(`[AWS] ⚠️  ${eventosAtivos.length} evento(s) ativo(s):`);
+    eventosAtivos.forEach(e => console.log(`  ↳ [${mapearStatusAWS(e.status)}] ${e.service_name} — ${e.region_name} — ${e.summary}`));
+  } else {
+    console.log(`[AWS] ✓ Nenhum evento ativo`);
+  }
+
+  // Componente interno com ID fixo para rastreamento de alertas
+  const componentesInternos = [{
+    id:              'AWS-geral',
+    nome:            'AWS',
+    provedor:        'AWS',
+    categoria:       'infraestrutura',
+    grupo:           null,
+    status:          statusGeral,
+    status_original: statusGeral.toLowerCase(),
+    label:           labelGeral,
+    descricao:       mensagem,
+    atualizado_em:   new Date().toISOString()
+  }];
+
+  return {
+    card: {
+      id:               'agregado-AWS',
+      nome:             'AWS',
+      provedor:         'AWS',
+      categoria:        'infraestrutura',
+      status:           statusGeral,
+      label:            labelGeral,
+      mensagem,
+      detalhes:         [],
+      incidente_ativo:  eventosAtivos.length > 0,
+      incidentes_ativos: incidentesAtivos,
+      atualizado_em:    new Date().toISOString(),
+      agregado:         true
+    },
+    componentesInternos,
+    incidentes:       [...incidentesAtivos, ...incidentesResolvidos],
+    incidentesAtivos,
+    manutencoes:      []
+  };
+}
+
+// ─────────────────────────────────────────────(componente, statusNovo, statusAnterior) {
   const emoji = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
   const label = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
 
@@ -860,32 +1012,37 @@ async function monitorar() {
   console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
   console.log('='.repeat(80));
 
-  const [oktoResult, cloudflareResult, ...kycResults] = await Promise.all([
+  const [oktoResult, cloudflareResult, awsResult, ...kycResults] = await Promise.all([
     consultarOkto(),
     consultarCloudflare(),
+    consultarAWS(),
     ...KYC_CONFIGS.map(c => consultarKYC(c))
   ]);
 
   const componentesOkto        = oktoResult.componentes;
   const componentesKYC         = kycResults.flatMap(r => r.componentesInternos);
   const componentesCloudflare  = cloudflareResult.componentesInternos;
-  const todosComponentes       = [...componentesOkto, ...componentesKYC, ...componentesCloudflare];
+  const componentesAWS         = awsResult.componentesInternos;
+  const todosComponentes       = [...componentesOkto, ...componentesKYC, ...componentesCloudflare, ...componentesAWS];
 
   const todosIncidentes  = [
-    ...(oktoResult.incidentes       || []),
-    ...(cloudflareResult.incidentes || []),
+    ...(oktoResult.incidentes        || []),
+    ...(cloudflareResult.incidentes  || []),
+    ...(awsResult.incidentes         || []),
     ...kycResults.flatMap(r => r.incidentes  || [])
   ];
   const todasManutencoes = [
     ...(oktoResult.manutencoes       || []),
     ...(cloudflareResult.manutencoes || []),
+    ...(awsResult.manutencoes        || []),
     ...kycResults.flatMap(r => r.manutencoes || [])
   ];
 
-  // Incidentes ATIVOS — Okto e Cloudflare (ambos usam lógica de incidentes com log)
-  const incidentesAtivosOkto        = oktoResult.incidentesAtivos        || [];
-  const incidentesAtivosCloudflare  = cloudflareResult.incidentesAtivos  || [];
-  const todosIncidentesAtivos       = [...incidentesAtivosOkto, ...incidentesAtivosCloudflare];
+  // Incidentes ATIVOS — Okto, Cloudflare e AWS
+  const incidentesAtivosOkto       = oktoResult.incidentesAtivos       || [];
+  const incidentesAtivosCloudflare = cloudflareResult.incidentesAtivos  || [];
+  const incidentesAtivosAWS        = awsResult.incidentesAtivos         || [];
+  const todosIncidentesAtivos      = [...incidentesAtivosOkto, ...incidentesAtivosCloudflare, ...incidentesAtivosAWS];
 
   // Alerta Slack para novos incidentes ativos (Okto + Cloudflare)
   for (const inc of todosIncidentesAtivos) {
@@ -918,17 +1075,19 @@ async function monitorar() {
   // Dashboard:
   //   • Okto        → cards individuais (bancos + APIs)
   //   • KYC         → 1 card por processadora
-  //   • Cloudflare  → 1 card agregado (com incidentes e log)
+  //   • Cloudflare  → 1 card agregado
+  //   • AWS         → 1 card agregado
   const componentesDashboard = [
     ...componentesOkto,
     ...kycResults.map(r => r.card),
-    cloudflareResult.card
+    cloudflareResult.card,
+    awsResult.card
   ];
 
   const porCategoria = {
     pagamentos:    componentesOkto,
     kyc:           componentesKYC,
-    infraestrutura: componentesCloudflare
+    infraestrutura: [...componentesCloudflare, ...componentesAWS]
   };
 
   const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
@@ -959,7 +1118,8 @@ async function monitorar() {
       dashboard_cards:   componentesDashboard.length,
       okto_cards:        componentesOkto.length,
       kyc_cards:         kycResults.length,
-      cloudflare_cards:  1
+      cloudflare_cards:  1,
+      aws_cards:         1
     }
   };
 
@@ -999,7 +1159,7 @@ async function monitorar() {
   } catch (e) {}
 
   console.log(`\n[Monitor] RESUMO:`);
-  console.log(`  Cards dashboard   : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC + 1 Cloudflare)`);
+  console.log(`  Cards dashboard   : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC + 1 Cloudflare + 1 AWS)`);
   console.log(`  Status geral      : UP=${nUp} | DEGRADED=${nDegraded} | DOWN=${nDown}`);
   if (todosIncidentesAtivos.length > 0) {
     console.log(`  Incidentes ativos : ${todosIncidentesAtivos.length}`);
@@ -1034,7 +1194,8 @@ app.get('/api/health', (req, res) => {
       serasa:     KYC_CONFIGS[0].urlStatus,
       legitimuz:  KYC_CONFIGS[1].urlStatus,
       unico:      KYC_CONFIGS[2].urlStatus,
-      cloudflare: CLOUDFLARE_CONFIG.urlStatus
+      cloudflare: CLOUDFLARE_CONFIG.urlStatus,
+      aws:        AWS_CONFIG.url
     }
   });
 });
@@ -1147,6 +1308,7 @@ server.listen(PORTA, '0.0.0.0', () => {
     console.log(`  • ${k.nome.padEnd(12)} [1 CARD AGREGADO]    → status.json  (+summary.json se degradado/down)`);
   });
   console.log(`  • Cloudflare     [1 CARD AGREGADO]    → status.json  (+summary.json sempre, para incidentes)`);
+  console.log(`  • AWS            [1 CARD AGREGADO]    → data.json    (eventos ativos status > 0)`);
   console.log(`\nIgnorados Okto : ${IGNORADOS_OKTO.join(' | ')}`);
   console.log(`Slack          : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
   console.log(`Email          : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
