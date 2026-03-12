@@ -3,243 +3,339 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relatórios – Pix Health Monitor</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <title>Pix Health Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     :root {
-      --bg:        #080808;
-      --surface:   #111111;
-      --border:    #1c1c1c;
-      --border-md: #242424;
-      --text:      #e8e8e8;
-      --muted:     #555;
-      --faint:     #2e2e2e;
-      --green:     #22c55e;
-      --green-dim: #0d2b1a;
-      --green-bd:  #1a4d30;
-      --yellow:    #eab308;
-      --yellow-dim:#1e1600;
-      --yellow-bd: #3d2e00;
-      --red:       #ef4444;
-      --red-dim:   #1a0808;
-      --red-bd:    #3d1212;
-      --blue:      #60a5fa;
-      --blue-dim:  #0a1628;
-      --blue-bd:   #1e3356;
-      --purple:    #a78bfa;
-      --purple-dim:#120d2a;
-      --purple-bd: #2d1f5e;
-      --orange:    #f97316;
-      --orange-dim:#1a0c00;
-      --orange-bd: #7c3a00;
+      --bg:          #060608;
+      --bg2:         #0a0a0d;
+      --surface:     #0f0f13;
+      --surface2:    #141418;
+      --border:      #1a1a20;
+      --border-md:   #222228;
+      --border-hi:   #2e2e38;
+      --text:        #f0f0f5;
+      --text-2:      #a0a0b0;
+      --muted:       #4a4a5a;
+      --faint:       #252530;
+      --green:       #1fd97a;
+      --green-dim:   #071a10;
+      --green-bd:    #0f3320;
+      --green-glow:  rgba(31,217,122,0.12);
+      --yellow:      #f5c842;
+      --yellow-dim:  #1a1400;
+      --yellow-bd:   #352800;
+      --yellow-glow: rgba(245,200,66,0.1);
+      --red:         #ff4d4d;
+      --red-dim:     #1a0606;
+      --red-bd:      #3a0e0e;
+      --red-glow:    rgba(255,77,77,0.12);
+      --blue:        #5b9ef7;
+      --purple:      #a78bfa;
+      --purple-dim:  #120d2a;
+      --purple-bd:   #2d1f5e;
+      --mono:        'JetBrains Mono', monospace;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg); color: var(--text);
-      padding: 0; min-height: 100vh;
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
     }
 
     /* ─── TOPBAR ─── */
     .topbar {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(8,8,8,0.92); backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 200;
+      background: rgba(6,6,8,0.95); backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
-      padding: 0 32px; height: 56px;
+      padding: 0 36px; height: 58px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .topbar-logo { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; }
-    .topbar-logo svg { width: 16px; height: 16px; color: var(--green); }
-    .topbar-right { display: flex; align-items: center; gap: 14px; }
-    .topbar-att { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
-    .topbar-att svg { width: 12px; height: 12px; }
-    .btn-back {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 14px; border-radius: 7px;
-      font-size: 12px; font-weight: 600;
-      background: var(--surface); border: 1px solid var(--border-md);
-      color: var(--muted); text-decoration: none; transition: all 0.2s;
+    .topbar-logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--green-dim); border: 1px solid var(--green-bd);
+      display: flex; align-items: center; justify-content: center;
     }
-    .btn-back svg { width: 13px; height: 13px; }
-    .btn-back:hover { border-color: var(--green-bd); color: var(--green); }
+    .logo-icon svg { width: 15px; height: 15px; color: var(--green); }
+    .logo-name  { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
+    .logo-tag   {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      background: var(--surface2); border: 1px solid var(--border-md);
+      padding: 2px 8px; border-radius: 4px; letter-spacing: 0.4px;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-clock {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      color: var(--text-2); background: var(--surface);
+      border: 1px solid var(--border-md); padding: 5px 12px; border-radius: 6px;
+    }
+    .ws-pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid var(--border-md); font-size: 11px; font-weight: 600;
+      color: var(--muted); background: var(--surface); transition: all 0.3s;
+    }
+    .ws-pill.ok { border-color: var(--green-bd); color: var(--green); background: var(--green-dim); }
+    .ws-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+    .ws-pill.ok .ws-dot { background: var(--green); animation: blink 2s infinite; }
+    .btn-nav {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      background: var(--surface2); border: 1px solid var(--border-md);
+      color: var(--text-2); text-decoration: none; transition: all 0.2s;
+    }
+    .btn-nav svg { width: 13px; height: 13px; }
+    .btn-nav:hover { border-color: var(--green-bd); color: var(--green); background: var(--green-dim); }
 
     /* ─── WRAP ─── */
-    .wrap { max-width: 1300px; margin: 0 auto; padding: 28px 24px 60px; }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 28px 80px; }
 
-    /* ─── HEADER ─── */
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 22px; font-weight: 700; }
-    .page-header p  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    /* ─── HERO ─── */
+    .hero { display: flex; gap: 12px; margin-bottom: 10px; }
+    .hero-banner {
+      flex: 1; display: flex; align-items: center; gap: 14px;
+      padding: 18px 24px; border-radius: 12px; border: 1px solid;
+      font-size: 15px; font-weight: 600; letter-spacing: -0.2px; transition: all 0.4s;
+    }
+    .hero-banner svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .hero-banner.up       { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
+    .hero-banner.degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
+    .hero-banner.down     { background: var(--red-dim); border-color: var(--red-bd); color: var(--red); animation: pulse-banner 2s infinite; }
+    @keyframes pulse-banner { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 28px var(--red-glow); } }
+    .hero-meta {
+      display: flex; flex-direction: column; align-items: flex-end;
+      justify-content: center; gap: 3px; padding: 16px 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      min-width: 170px;
+    }
+    .hero-meta-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+    .hero-meta-val   { font-family: var(--mono); font-size: 13px; color: var(--text-2); }
 
-    /* ─── RESUMO CARDS ─── */
-    .resumo-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px; margin-bottom: 20px;
-    }
-    .rc {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 11px; padding: 16px 18px;
-    }
-    .rc-top { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
-    .rc-top svg { width: 13px; height: 13px; }
-    .rc-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
-    .rc-val { font-size: 28px; font-weight: 700; line-height: 1; }
-    .rc-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    .rc.up       { border-color: var(--green-bd); }
-    .rc.up       .rc-top svg, .rc.up       .rc-val { color: var(--green); }
-    .rc.degraded { border-color: var(--yellow-bd); }
-    .rc.degraded .rc-top svg, .rc.degraded .rc-val { color: var(--yellow); }
-    .rc.down     { border-color: var(--red-bd); }
-    .rc.down     .rc-top svg, .rc.down     .rc-val { color: var(--red); }
-    .rc.neutro   .rc-top svg { color: var(--muted); }
-    .rc.neutro   .rc-val     { color: #888; }
-
-    /* ─── DESTAQUE ─── */
-    .destaque {
-      background: var(--surface); border: 1px solid var(--red-bd);
-      border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
-    }
-    .sec-title {
-      display: flex; align-items: center; gap: 7px;
-      font-size: 11px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 16px;
-    }
-    .sec-title svg { width: 13px; height: 13px; }
-    .destaque .sec-title { color: var(--red); }
-    .destaque .sec-title svg { color: var(--red); }
-
-    .d-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-    .d-item {
-      background: var(--bg); padding: 14px 16px; border-radius: 9px;
-      border-left: 2px solid var(--red);
-    }
-    .d-item label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; font-weight: 600; }
-    .d-item value { font-size: 20px; font-weight: 700; color: var(--text); display: block; }
-
-    /* ─── PANEL ─── */
-    .panel {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 20px 24px; margin-bottom: 16px;
-    }
-
-    /* ─── TABS CATEGORIA ─── */
-    .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
-    .tab {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 6px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
-      cursor: pointer; border: 1px solid var(--border-md);
-      background: var(--bg); color: var(--muted); transition: all 0.2s;
-    }
-    .tab svg { width: 11px; height: 11px; }
-    .tab:hover { color: var(--text); }
-    .tab.ativo { background: var(--green-dim); border-color: var(--green-bd); color: var(--green); }
-    .tab-count {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 18px; height: 18px; border-radius: 4px;
-      font-size: 10px; background: var(--faint); color: var(--muted);
-    }
-    .tab.ativo .tab-count { background: var(--green-bd); color: var(--green); }
-
-    /* ─── FILTROS ─── */
-    .filtros-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px; margin-bottom: 14px;
-    }
-    .f-label { display: block; font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .f-input, .f-select {
-      width: 100%; padding: 9px 12px;
-      background: var(--bg); border: 1px solid var(--border-md);
-      border-radius: 7px; font-size: 13px; color: var(--text);
-      transition: border-color 0.2s;
-    }
-    .f-input:focus, .f-select:focus { outline: none; border-color: var(--green-bd); }
-    .acoes { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
-    .btn {
+    /* ─── CHIPS ─── */
+    .resumo-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; margin-top: 10px; }
+    .chip {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 9px 20px; border-radius: 7px;
-      font-size: 12px; font-weight: 600; cursor: pointer;
-      border: 1px solid; transition: all 0.2s;
+      padding: 5px 14px; border-radius: 6px;
+      font-size: 11px; font-weight: 700; border: 1px solid;
+      letter-spacing: 0.4px; font-family: var(--mono);
     }
-    .btn svg { width: 13px; height: 13px; }
-    .btn-green { background: var(--green-dim); color: var(--green); border-color: var(--green-bd); }
-    .btn-green:hover { background: var(--green-bd); }
-    .btn-blue  { background: var(--blue-dim);  color: var(--blue);  border-color: var(--blue-bd); }
-    .btn-blue:hover  { background: var(--blue-bd); }
-    #export-fb { font-size: 11px; color: var(--green); display: none; }
+    .chip svg { width: 10px; height: 10px; }
+    .chip-up       { background: var(--green-dim);  border-color: var(--green-bd);  color: var(--green); }
+    .chip-degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
+    .chip-down     { background: var(--red-dim);    border-color: var(--red-bd);    color: var(--red); }
+    .chip-incident { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
+    .chip-total    { background: var(--surface);    border-color: var(--border-md); color: var(--muted); }
 
-    /* ─── GRÁFICOS ─── */
-    .graficos {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-      gap: 14px; margin-bottom: 16px;
+    /* Aviso de incidente ativo inline no card (componente ainda operational) */
+    .inc-aviso {
+      margin-top: 10px; padding: 10px 12px; border-radius: 7px;
+      background: var(--yellow-dim); border: 1px solid var(--yellow-bd);
+      display: flex; flex-direction: column; gap: 4px;
     }
+    .inc-aviso-titulo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700; color: var(--yellow);
+    }
+    .inc-aviso-titulo svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .inc-aviso-body { font-size: 11px; color: var(--text-2); line-height: 1.5; }
 
-    /* ─── TABELA ─── */
-    .tabela-scroll { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th {
-      background: var(--bg); padding: 10px 14px; text-align: left;
+    /* ─── SEÇÃO ─── */
+    .section { margin-bottom: 36px; }
+    .section-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .section-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: var(--surface2); border: 1px solid var(--border-md);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .section-icon svg { width: 13px; height: 13px; color: var(--text-2); }
+    .section-title { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 1px; }
+    .section-count { margin-left: auto; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+    /* ─── GRID ─── */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px; }
+
+    /* ─── CARD BASE ─── */
+    .comp-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    }
+    .comp-card:hover { transform: translateY(-2px); }
+    .card-accent { height: 3px; }
+    .comp-card.up       .card-accent { background: var(--green-bd); }
+    .comp-card.degraded .card-accent { background: var(--yellow); animation: bar-blink 2s infinite; }
+    .comp-card.down     .card-accent { background: var(--red);    animation: bar-blink 1.5s infinite; }
+    @keyframes bar-blink { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+    .comp-card.up       { border-color: var(--green-bd); }
+    .comp-card.degraded { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
+    .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red    2s infinite; }
+    /* warning = componente operational mas com incidente ativo reportado */
+    .comp-card.warning  { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
+    .comp-card.warning  .card-accent  { background: var(--yellow); animation: bar-blink 2s infinite; }
+    .comp-card.warning  .card-dot     { background: var(--yellow); animation: blink 2s infinite; }
+    .comp-card.warning  .status-badge { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.warning  .btn-incidente{ color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.warning  .btn-incidente:hover { background: var(--yellow-dim); }
+    @keyframes pulse-red    { 0%,100% { border-color:var(--red-bd);    box-shadow:none; } 50% { border-color:var(--red);    box-shadow:0 0 16px var(--red-glow); } }
+    @keyframes pulse-yellow { 0%,100% { border-color:var(--yellow-bd); box-shadow:none; } 50% { border-color:var(--yellow); box-shadow:0 0 16px var(--yellow-glow); } }
+    @keyframes blink        { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
+
+    .card-body { padding: 16px 18px 18px; }
+    .card-top  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .card-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .comp-card.up       .card-dot { background: var(--green);  box-shadow: 0 0 6px var(--green-glow); }
+    .comp-card.degraded .card-dot { background: var(--yellow); animation: blink 2s infinite; }
+    .comp-card.down     .card-dot { background: var(--red);    animation: blink 1.5s infinite; }
+    .card-nome {
+      font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 5px; flex-shrink: 0;
+      font-size: 10px; font-weight: 700; font-family: var(--mono);
+      text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid;
+    }
+    .status-badge svg { width: 9px; height: 9px; }
+    .comp-card.up       .status-badge { background: var(--green-dim);  color: var(--green);  border-color: var(--green-bd); }
+    .comp-card.degraded .status-badge { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.down     .status-badge { background: var(--red-dim);    color: var(--red);    border-color: var(--red-bd); }
+    .card-divider { height: 1px; background: var(--border); margin-bottom: 12px; }
+    .card-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .card-meta-item { display: flex; align-items: center; gap: 4px; font-family: var(--mono); }
+    .card-meta-item svg { width: 10px; height: 10px; }
+
+    /* ─── KYC: área extra do card ─── */
+    .kyc-ok {
+      margin-top: 10px; padding: 8px 12px; border-radius: 7px;
+      font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px;
+      background: var(--green-dim); border: 1px solid var(--green-bd); color: var(--green);
+    }
+    .kyc-ok svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .kyc-warn {
+      margin-top: 10px; padding: 8px 12px; border-radius: 7px;
+      font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px;
+      background: var(--yellow-dim); border: 1px solid var(--yellow-bd); color: var(--yellow);
+    }
+    .kyc-warn svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+    .kyc-detalhes { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .kyc-det-label {
       font-size: 10px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      display: flex; align-items: center; gap: 5px; margin-bottom: 2px;
     }
-    td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 12px; color: #bbb; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #0d0d0d; }
-
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 9px; border-radius: 4px;
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
-    }
-    .badge svg { width: 9px; height: 9px; }
-    .badge-up       { background: var(--green-dim);  color: var(--green); }
-    .badge-degraded { background: var(--yellow-dim); color: var(--yellow); }
-    .badge-down     { background: var(--red-dim);    color: var(--red); }
-
-    /* Tags de categoria */
-    .cat-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 4px;
-      font-size: 10px; font-weight: 600;
-      background: var(--faint); border: 1px solid var(--border-md);
-    }
-    .cat-tag svg { width: 9px; height: 9px; }
-    .cat-tag.pagamentos    { background: var(--blue-dim);   border-color: var(--blue-bd);   color: var(--blue); }
-    .cat-tag.kyc           { background: var(--purple-dim); border-color: var(--purple-bd); color: var(--purple); }
-    .cat-tag.infraestrutura{ background: var(--orange-dim); border-color: var(--orange-bd); color: var(--orange); }
-
-    .grupo-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 4px;
-      font-size: 10px; color: var(--muted);
-      background: var(--faint); border: 1px solid var(--border-md);
-    }
-    .grupo-tag svg { width: 9px; height: 9px; }
-
-    /* Detalhes expandidos na tabela */
-    .det-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-    .det-item {
-      display: flex; align-items: flex-start; gap: 6px;
-      font-size: 11px; color: var(--muted);
-      padding: 4px 8px; background: var(--bg); border-radius: 5px;
+    .kyc-det-label svg { width: 10px; height: 10px; }
+    .kyc-det-item {
+      background: var(--bg2); border-radius: 7px; padding: 9px 12px;
       border-left: 2px solid var(--border-md);
+      display: flex; flex-direction: column; gap: 3px;
     }
-    .det-item.det-down     { border-left-color: var(--red); }
-    .det-item.det-degraded { border-left-color: var(--yellow); }
-    .det-name   { color: var(--text); font-weight: 600; min-width: 120px; }
-    .det-motivo { color: var(--muted); }
+    .kyc-det-item.det-down     { border-left-color: var(--red); }
+    .kyc-det-item.det-degraded { border-left-color: var(--yellow); }
+    .kyc-det-row   { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .kyc-det-nome  { font-size: 12px; font-weight: 600; color: var(--text); }
+    .kyc-det-badge {
+      font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .kyc-det-badge.down     { background: var(--red-dim);    color: var(--red);    border: 1px solid var(--red-bd); }
+    .kyc-det-badge.degraded { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow-bd); }
+    .kyc-det-motivo { font-size: 11px; color: var(--muted); line-height: 1.5; }
 
-    .loading-td { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
-    .ver-mais-wrap { text-align: center; margin-top: 14px; }
+    /* ─── BOTÃO INCIDENTE (Okto) ─── */
+    .btn-incidente {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      margin-top: 13px; padding: 8px 14px; border-radius: 7px;
+      font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--mono);
+      border: 1px solid; transition: all 0.2s; width: 100%;
+      background: transparent; letter-spacing: 0.4px; text-transform: uppercase;
+    }
+    .btn-incidente svg { width: 12px; height: 12px; }
+    .comp-card.degraded .btn-incidente { color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.degraded .btn-incidente:hover { background: var(--yellow-dim); }
+    .comp-card.down     .btn-incidente { color: var(--red);    border-color: var(--red-bd); }
+    .comp-card.down     .btn-incidente:hover { background: var(--red-dim); }
+
+    /* ─── MODAL ─── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+      z-index: 500; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; animation: fadeIn 0.15s; }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    .modal {
+      background: var(--surface2); border: 1px solid var(--border-hi);
+      border-radius: 14px; width: 100%; max-width: 580px;
+      max-height: 82vh; overflow-y: auto; margin: 20px;
+      animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes slideUp { from { transform:translateY(18px) scale(0.98); opacity:0; } to { transform:translateY(0) scale(1); opacity:1; } }
+    .modal-top-bar { height: 3px; background: var(--red); border-radius: 14px 14px 0 0; }
+    .modal-top-bar.degraded { background: var(--yellow); }
+    .modal-inner   { padding: 24px 28px 28px; }
+    .modal-header  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+    .modal-titulo  { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .modal-sub     { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+    .modal-fechar  {
+      background: var(--surface); border: 1px solid var(--border-md);
+      color: var(--muted); cursor: pointer; padding: 6px; border-radius: 7px;
+      display: flex; align-items: center; transition: all 0.2s; flex-shrink: 0;
+    }
+    .modal-fechar:hover { background: var(--faint); color: var(--text); }
+    .modal-fechar svg { width: 14px; height: 14px; }
+    .modal-pills { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .modal-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 5px;
+      font-size: 10px; font-weight: 700; border: 1px solid;
+      font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.4px; text-decoration: none;
+    }
+    .modal-pill svg { width: 10px; height: 10px; }
+    .pill-red    { background: var(--red-dim);    color: var(--red);    border-color: var(--red-bd); }
+    .pill-yellow { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .pill-green  { background: var(--green-dim);  color: var(--green);  border-color: var(--green-bd); }
+    .pill-muted  { background: var(--surface);    color: var(--muted);  border-color: var(--border-md); }
+    .modal-section-label {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .modal-section-label svg { width: 11px; height: 11px; }
+    .updates-list { display: flex; flex-direction: column; gap: 8px; }
+    .update-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 13px 15px; border-left: 2px solid var(--yellow);
+    }
+    .update-item.resolved      { border-left-color: var(--green); }
+    .update-item.investigating { border-left-color: var(--red); }
+    .update-status { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; font-family: var(--mono); }
+    .update-body   { font-size: 12px; color: var(--text-2); line-height: 1.65; }
+    .update-time   { font-size: 10px; color: var(--muted); margin-top: 7px; font-family: var(--mono); }
+    .modal-no-updates {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 16px; text-align: center; font-size: 12px; color: var(--muted);
+    }
+
+    .loading-grid { grid-column: 1 / -1; text-align: center; padding: 50px; color: var(--muted); font-size: 13px; }
 
     @media (max-width: 768px) {
-      .topbar { padding: 0 16px; }
-      .wrap { padding: 20px 14px 50px; }
-      .graficos { grid-template-columns: 1fr; }
-      .resumo-grid { grid-template-columns: repeat(2, 1fr); }
+      .topbar { padding: 0 18px; }
+      .logo-tag { display: none; }
+      .wrap { padding: 20px 16px 60px; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .hero { flex-direction: column; }
+      .hero-meta { flex-direction: row; justify-content: space-between; min-width: unset; }
     }
   </style>
 </head>
@@ -247,514 +343,418 @@
 
   <header class="topbar">
     <div class="topbar-logo">
-      <i data-lucide="bar-chart-2"></i> Relatórios – Pix Health Monitor
+      <div class="logo-icon"><i data-lucide="activity"></i></div>
+      <span class="logo-name">Pix Health Monitor</span>
+      <span class="logo-tag">MONITOR</span>
     </div>
     <div class="topbar-right">
-      <div class="topbar-att">
-        <i data-lucide="refresh-cw"></i>
-        Atualizado em <strong id="ultimaAtt" style="color:#888;margin-left:4px">--:--:--</strong>
+      <div class="topbar-clock" id="relogio">--:--:--</div>
+      <div class="ws-pill" id="wsPill">
+        <div class="ws-dot"></div>
+        <span id="wsTexto">Conectando</span>
       </div>
-      <a href="/" class="btn-back"><i data-lucide="arrow-left"></i> Dashboard</a>
+      <a href="/relatorios.html" class="btn-nav">
+        <i data-lucide="bar-chart-2"></i> Relatórios
+      </a>
     </div>
   </header>
 
   <div class="wrap">
 
-    <div class="page-header">
-      <h1>Histórico de Disponibilidade</h1>
-      <p>Análise de incidentes e disponibilidade dos serviços ao longo do dia</p>
-    </div>
-
-    <!-- Resumo -->
-    <div class="resumo-grid">
-      <div class="rc neutro">
-        <div class="rc-top"><i data-lucide="layers"></i><span class="rc-label">Verificações</span></div>
-        <div class="rc-val" id="r-total">—</div>
-        <div class="rc-sub">no dia</div>
+    <div class="hero">
+      <div class="hero-banner up" id="banner">
+        <i data-lucide="check-circle"></i>
+        <span>Carregando status...</span>
       </div>
-      <div class="rc up">
-        <div class="rc-top"><i data-lucide="check-circle"></i><span class="rc-label">Operacional</span></div>
-        <div class="rc-val" id="r-up">—</div>
-        <div class="rc-sub">snapshots UP</div>
-      </div>
-      <div class="rc degraded">
-        <div class="rc-top"><i data-lucide="alert-triangle"></i><span class="rc-label">Degradação</span></div>
-        <div class="rc-val" id="r-degraded">—</div>
-        <div class="rc-sub">snapshots DEGRADED</div>
-      </div>
-      <div class="rc down">
-        <div class="rc-top"><i data-lucide="x-circle"></i><span class="rc-label">Down</span></div>
-        <div class="rc-val" id="r-down">—</div>
-        <div class="rc-sub">snapshots DOWN</div>
+      <div class="hero-meta">
+        <span class="hero-meta-label">Última verificação</span>
+        <span class="hero-meta-val" id="ultimaAtt">--:--:--</span>
       </div>
     </div>
 
-    <!-- Destaque -->
-    <div class="destaque">
-      <div class="sec-title"><i data-lucide="alert-octagon"></i> Horário Mais Crítico do Dia</div>
-      <div class="d-grid" id="destaqueGrid"><div class="loading-td">Carregando análise...</div></div>
-    </div>
+    <div class="resumo-chips" id="chips"></div>
 
-    <!-- Filtros -->
-    <div class="panel">
-      <div class="sec-title"><i data-lucide="sliders"></i> Filtros</div>
-
-      <div class="tabs">
-        <button class="tab ativo" data-cat="" onclick="selecionarCategoria(this, '')">
-          <i data-lucide="layout-grid"></i> Todos
-          <span class="tab-count" id="tc-todos">—</span>
-        </button>
-        <button class="tab" data-cat="pagamentos" onclick="selecionarCategoria(this, 'pagamentos')">
-          <i data-lucide="landmark"></i> Instituições Financeiras
-          <span class="tab-count" id="tc-pagamentos">—</span>
-        </button>
-        <button class="tab" data-cat="kyc" onclick="selecionarCategoria(this, 'kyc')">
-          <i data-lucide="shield-check"></i> Processadoras KYC
-          <span class="tab-count" id="tc-kyc">—</span>
-        </button>
-        <button class="tab" data-cat="infraestrutura" onclick="selecionarCategoria(this, 'infraestrutura')">
-          <i data-lucide="cloud"></i> Infraestrutura
-          <span class="tab-count" id="tc-infra">—</span>
-        </button>
+    <!-- APIs & Infra: 3 KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit) -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon"><i data-lucide="zap"></i></div>
+        <span class="section-title">APIs &amp; Infraestrutura</span>
+        <span class="section-count" id="count-apis"></span>
       </div>
-
-      <div class="filtros-grid">
-        <div>
-          <label class="f-label">Componente / Provedor</label>
-          <select class="f-select" id="filtro-componente"><option value="">Todos</option></select>
-        </div>
-        <div>
-          <label class="f-label">Hora Início</label>
-          <input type="number" class="f-input" id="filtro-inicio" min="0" max="23" placeholder="Ex: 8">
-        </div>
-        <div>
-          <label class="f-label">Hora Fim</label>
-          <input type="number" class="f-input" id="filtro-fim" min="0" max="23" placeholder="Ex: 18">
-        </div>
-      </div>
-      <div class="acoes">
-        <button class="btn btn-green" onclick="aplicarFiltros()">
-          <i data-lucide="search"></i> Aplicar Filtros
-        </button>
-        <button class="btn btn-blue" onclick="exportarCSV()">
-          <i data-lucide="download"></i> Exportar CSV
-        </button>
-        <span id="export-fb">Download iniciado!</span>
+      <div class="cards-grid" id="grid-apis">
+        <div class="loading-grid">Carregando...</div>
       </div>
     </div>
 
-    <!-- Gráficos -->
-    <div class="graficos">
-      <div class="panel" style="margin-bottom:0">
-        <div class="sec-title"><i data-lucide="trending-up"></i> Disponibilidade por Hora (%)</div>
-        <canvas id="g-disp"></canvas>
+    <!-- Infraestrutura: Cloudflare -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon"><i data-lucide="cloud"></i></div>
+        <span class="section-title">Infraestrutura</span>
+        <span class="section-count" id="count-infra"></span>
       </div>
-      <div class="panel" style="margin-bottom:0">
-        <div class="sec-title"><i data-lucide="bar-chart-2"></i> Incidentes por Hora (DEGRADAÇÃO + DOWN)</div>
-        <canvas id="g-inc"></canvas>
+      <div class="cards-grid" id="grid-infra">
+        <div class="loading-grid">Carregando...</div>
       </div>
     </div>
 
-    <!-- Tabela -->
-    <div class="panel" style="margin-top:16px">
-      <div class="sec-title"><i data-lucide="list"></i> Histórico Detalhado</div>
-      <div class="tabela-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Hora</th>
-              <th>Serviço / Provedor</th>
-              <th>Categoria</th>
-              <th>Status</th>
-              <th>Detalhes</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
+    <!-- Instituições: 10 bancos da Okto (têm grupo) -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon"><i data-lucide="landmark"></i></div>
+        <span class="section-title">Instituições Bancárias</span>
+        <span class="section-count" id="count-bancos"></span>
       </div>
-      <div class="ver-mais-wrap" id="verMaisWrap" style="display:none">
-        <button class="btn btn-green" onclick="verMais()">
-          <i data-lucide="chevron-down"></i> Ver Mais
-        </button>
+      <div class="cards-grid" id="grid-bancos">
+        <div class="loading-grid">Carregando...</div>
       </div>
     </div>
 
   </div>
 
+  <!-- MODAL incidente -->
+  <div class="modal-overlay" id="modalOverlay" onclick="fecharModal(event)">
+    <div class="modal">
+      <div class="modal-top-bar" id="modalBar"></div>
+      <div class="modal-inner">
+        <div class="modal-header">
+          <div>
+            <div class="modal-titulo" id="modalTitulo">—</div>
+            <div class="modal-sub"    id="modalSub">—</div>
+          </div>
+          <button class="modal-fechar" onclick="fecharModalBtn()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-pills" id="modalPills"></div>
+        <div class="modal-section-label"><i data-lucide="list"></i> Atualizações do Incidente</div>
+        <div class="updates-list" id="modalUpdates"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     lucide.createIcons();
 
-    let gDisp, gInc;
-    let todos = [], visiveis = 20;
-    let categoriaAtiva = '';
+    function tick() { document.getElementById('relogio').textContent = new Date().toLocaleTimeString('pt-BR'); }
+    tick(); setInterval(tick, 1000);
 
-    const CHART_OPTS = {
-      responsive: true,
-      plugins: { legend: { labels: { color: '#555', font: { size: 11 }, boxWidth: 12 } } },
-      scales: {
-        y: { grid: { color: '#1a1a1a' }, ticks: { color: '#444', font: { size: 11 } } },
-        x: { grid: { color: '#1a1a1a' }, ticks: { color: '#444', font: { size: 11 } } }
+    let ws, tentativas = 0;
+    let incidentesAtivos = [];
+
+    function conectarWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(proto + '//' + location.host);
+      ws.onopen = () => {
+        tentativas = 0;
+        document.getElementById('wsPill').className = 'ws-pill ok';
+        document.getElementById('wsTexto').textContent = 'Ao vivo';
+      };
+      ws.onmessage = e => {
+        try { const m = JSON.parse(e.data); if (m.tipo === 'atualizacao') render(m.dados); } catch {}
+      };
+      ws.onclose = () => {
+        document.getElementById('wsPill').className = 'ws-pill';
+        document.getElementById('wsTexto').textContent = 'Reconectando';
+        if (tentativas < 10) { tentativas++; setTimeout(conectarWS, 4000); }
+      };
+    }
+
+    function icone(s) { return s === 'UP' ? 'check-circle' : s === 'DEGRADED' ? 'alert-triangle' : 'x-circle'; }
+    function fmt(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+
+    // ── Card individual Okto ──
+    function criarCardOkto(c) {
+      const att = fmt(c.atualizado_em);
+
+      // Busca incidente ativo vinculado a este componente
+      const inc = incidentesAtivos.find(i =>
+        i.provedor === 'Okto Payments' &&
+        i.status !== 'resolved' &&
+        (
+          (i.afetados && i.afetados.some(a => a.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(a.toLowerCase()))) ||
+          i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
+          c.nome.toLowerCase().includes(i.nome.toLowerCase())
+        )
+      );
+
+      // Se tem incidente ativo, card fica amarelo mesmo com status UP
+      const temIncidente = !!inc || c.incidente_ativo;
+      const statusFinal  = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+      const labelFinal   = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+      const icFinal      = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+
+      // Botão do log — aparece quando há incidente (ativo ou recente)
+      const incParaModal = inc || incidentesAtivos.find(i =>
+        i.provedor === 'Okto Payments' &&
+        (i.nome.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(i.nome.toLowerCase()))
+      );
+      const btn = incParaModal
+        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+        : '';
+
+      // Texto do incidente ativo inline (mesmo com componente operational)
+      let incidenteInline = '';
+      if (inc && c.status === 'UP') {
+        const lastUpdate = inc.updates && inc.updates[0];
+        incidenteInline = `
+          <div class="inc-aviso">
+            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+          </div>`;
       }
-    };
 
-    async function init() {
-      await Promise.all([carregarComponentes(), carregarHistorico()]);
-    }
-
-    // ── Popula o select usando componentes_dashboard ──
-    async function carregarComponentes() {
-      try {
-        const d   = await fetch('/api/status').then(r => r.json());
-        const lista = d.componentes_dashboard || d.componentes || [];
-        const sel   = document.getElementById('filtro-componente');
-
-        const pagamentos    = lista.filter(c => c.categoria === 'pagamentos');
-        const kyc           = lista.filter(c => c.categoria === 'kyc');
-        const infraestrutura= lista.filter(c => c.categoria === 'infraestrutura');
-
-        function addGroup(label, items) {
-          if (!items.length) return;
-          const grp = document.createElement('optgroup');
-          grp.label = label;
-          items.forEach(c => {
-            const o = document.createElement('option');
-            o.value = c.id; o.textContent = c.nome;
-            grp.appendChild(o);
-          });
-          sel.appendChild(grp);
-        }
-
-        addGroup('🏦 Instituições Financeiras', pagamentos);
-        addGroup('🛡️ Processadoras KYC',       kyc);
-        addGroup('☁️ Infraestrutura',           infraestrutura);
-
-        document.getElementById('tc-todos').textContent    = lista.length;
-        document.getElementById('tc-pagamentos').textContent = pagamentos.length;
-        document.getElementById('tc-kyc').textContent      = kyc.length;
-        document.getElementById('tc-infra').textContent    = infraestrutura.length;
-
-      } catch(e) { console.error(e); }
-    }
-
-    function selecionarCategoria(el, cat) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativo'));
-      el.classList.add('ativo');
-      categoriaAtiva = cat;
-      lucide.createIcons();
-      aplicarFiltros();
-    }
-
-    async function carregarHistorico(params = '') {
-      try {
-        const [hist, status] = await Promise.all([
-          fetch('/api/historico' + params).then(r => r.json()),
-          fetch('/api/status').then(r => r.json())
-        ]);
-
-        document.getElementById('ultimaAtt').textContent = new Date().toLocaleTimeString('pt-BR');
-
-        const dados = hist.dados || [];
-        const lista = status.componentes_dashboard || status.componentes || [];
-
-        // Provedores conhecidos por categoria
-        const kycProvedores   = new Set(lista.filter(c => c.categoria === 'kyc').map(c => c.nome || c.provedor));
-        const infraProvedores = new Set(lista.filter(c => c.categoria === 'infraestrutura').map(c => c.nome || c.provedor));
-
-        // Reconstrói snapshots com cards agregados corretos
-        const dadosNorm = dados.map(snapshot => {
-          const comps = snapshot.componentes || [];
-
-          // Okto: mantém individual
-          const okto = comps.filter(c => c.categoria === 'pagamentos');
-
-          // KYC: 1 card por provedor
-          const kycPorProv = {};
-          comps.filter(c => c.categoria === 'kyc').forEach(c => {
-            if (!kycPorProv[c.provedor]) kycPorProv[c.provedor] = [];
-            kycPorProv[c.provedor].push(c);
-          });
-          const kycCards = Object.entries(kycPorProv).map(([prov, items]) => {
-            const down = items.filter(i => i.status === 'DOWN');
-            const deg  = items.filter(i => i.status === 'DEGRADED');
-            const af   = [...down, ...deg];
-            let st = 'UP';
-            if (down.length) st = 'DOWN';
-            else if (deg.length) st = 'DEGRADED';
-            return {
-              id: `agregado-${prov}`, nome: prov, provedor: prov,
-              categoria: 'kyc', grupo: null, status: st,
-              original: st.toLowerCase(), agregado: true,
-              detalhes: af.map(i => ({
-                nome: i.nome,
-                status: i.status === 'DOWN' ? 'DOWN' : 'DEGRADAÇÃO',
-                motivo: i.descricao || `Instabilidade (${i.status_original || i.status})`
-              })),
-              mensagem: af.length === 0 ? 'Todos os serviços operacionais' : `${af.length} serviço(s) afetado(s)`
-            };
-          });
-          // Preenche KYC sem dados
-          kycProvedores.forEach(prov => {
-            if (!kycPorProv[prov]) kycCards.push({
-              id: `agregado-${prov}`, nome: prov, provedor: prov,
-              categoria: 'kyc', grupo: null, status: 'UP',
-              original: 'operational', agregado: true, detalhes: [],
-              mensagem: 'Sem dados históricos'
-            });
-          });
-
-          // Infraestrutura (Cloudflare): 1 card, status vem do componente interno salvo
-          // O histórico salva apenas 'Cloudflare-geral' com status UP/DEGRADED/DOWN
-          const infraComps = comps.filter(c => c.categoria === 'infraestrutura');
-          const infraCards = [];
-          const infraPorProv = {};
-          infraComps.forEach(c => {
-            if (!infraPorProv[c.provedor]) infraPorProv[c.provedor] = [];
-            infraPorProv[c.provedor].push(c);
-          });
-          Object.entries(infraPorProv).forEach(([prov, items]) => {
-            // Pega o pior status entre os componentes internos salvos
-            const hasDown = items.some(i => i.status === 'DOWN');
-            const hasDeg  = items.some(i => i.status === 'DEGRADED');
-            const st = hasDown ? 'DOWN' : hasDeg ? 'DEGRADED' : 'UP';
-            const descricao = items.find(i => i.status !== 'UP')?.descricao || '';
-            infraCards.push({
-              id: `agregado-${prov}`, nome: prov, provedor: prov,
-              categoria: 'infraestrutura', grupo: null, status: st,
-              original: st.toLowerCase(), agregado: true,
-              detalhes: [],
-              mensagem: st === 'UP' ? 'Nenhum incidente ativo' : (descricao || 'Incidente reportado')
-            });
-          });
-          // Preenche infra sem dados
-          infraProvedores.forEach(prov => {
-            if (!infraPorProv[prov]) infraCards.push({
-              id: `agregado-${prov}`, nome: prov, provedor: prov,
-              categoria: 'infraestrutura', grupo: null, status: 'UP',
-              original: 'operational', agregado: true, detalhes: [],
-              mensagem: 'Sem dados históricos'
-            });
-          });
-
-          return {
-            timestamp:   snapshot.timestamp,
-            hora:        snapshot.hora,
-            componentes: [...okto, ...kycCards, ...infraCards]
-          };
-        });
-
-        calcResumo(dadosNorm);
-        calcDestaque(dadosNorm);
-        renderDisp(dadosNorm);
-        renderInc(dadosNorm);
-        renderTabela(dadosNorm);
-        lucide.createIcons();
-
-      } catch(e) { console.error(e); }
-    }
-
-    function calcResumo(dados) {
-      let up = 0, deg = 0, down = 0;
-      dados.forEach(i => (i.componentes || []).forEach(c => {
-        if (c.status === 'UP')           up++;
-        else if (c.status === 'DEGRADED') deg++;
-        else if (c.status === 'DOWN')     down++;
-      }));
-      document.getElementById('r-total').textContent    = dados.length;
-      document.getElementById('r-up').textContent       = up;
-      document.getElementById('r-degraded').textContent = deg;
-      document.getElementById('r-down').textContent     = down;
-    }
-
-    function calcDestaque(dados) {
-      const el = document.getElementById('destaqueGrid');
-      if (!dados.length) { el.innerHTML = '<div class="loading-td">Aguardando dados...</div>'; return; }
-      const porHora = {};
-      dados.forEach(item => {
-        const h = (item.hora || '').substring(0, 5);
-        if (!porHora[h]) porHora[h] = { inc: 0, afetados: new Set() };
-        (item.componentes || []).forEach(c => {
-          if (c.status !== 'UP') { porHora[h].inc++; porHora[h].afetados.add(c.nome); }
-        });
-      });
-      const [hora, info] = Object.entries(porHora).sort((a,b) => b[1].inc - a[1].inc)[0] || [];
-      if (!hora || info.inc === 0) {
-        el.innerHTML = `<div class="d-item" style="border-left-color:var(--green)"><label>Status</label><value style="color:var(--green);font-size:14px">Nenhum incidente no dia</value></div>`;
-        return;
-      }
-      el.innerHTML = `
-        <div class="d-item"><label>Horário</label><value>${hora}</value></div>
-        <div class="d-item"><label>Incidentes</label><value>${info.inc}</value></div>
-        <div class="d-item"><label>Serviços</label><value>${info.afetados.size}</value></div>
-        <div class="d-item" style="grid-column:span 2">
-          <label>Afetados</label>
-          <value style="font-size:13px;line-height:1.6">${[...info.afetados].join(', ')}</value>
+      return `
+        <div class="comp-card ${statusFinal}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original || c.status.toLowerCase()}</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+            </div>
+            ${incidenteInline}
+            ${btn}
+          </div>
         </div>`;
     }
 
-    function filtrarPorCategoria(comps) {
-      if (!categoriaAtiva) return comps;
-      return comps.filter(c => c.categoria === categoriaAtiva);
-    }
+    // ── Card KYC agregado: SEMPRE 1 por processadora ──
+    // UP           → mensagem verde simples
+    // DEGRADED/DOWN → lista os serviços afetados com nome + motivo
+    function criarCardKYC(c) {
+      const att = fmt(c.atualizado_em);
+      let extra = '';
 
-    function renderDisp(dados) {
-      const ctx = document.getElementById('g-disp');
-      const ph = {};
-      dados.forEach(i => {
-        const h = (i.hora || '').substring(0, 5);
-        const comp = filtrarPorCategoria(i.componentes || []);
-        if (!ph[h]) ph[h] = { up: 0, t: 0 };
-        comp.forEach(c => { ph[h].t++; if (c.status === 'UP') ph[h].up++; });
-      });
-      const labels = Object.keys(ph).sort();
-      const vals = labels.map(h => ph[h].t > 0 ? ((ph[h].up / ph[h].t) * 100).toFixed(1) : 100);
-      if (gDisp) gDisp.destroy();
-      gDisp = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets: [{ label: 'Disponibilidade (%)', data: vals, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.07)', tension: 0.4, fill: true, pointRadius: 3, pointBackgroundColor: '#22c55e' }] },
-        options: { ...CHART_OPTS, plugins: { legend: { display: false } }, scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, min: 0, max: 100, ticks: { ...CHART_OPTS.scales.y.ticks, callback: v => v + '%' } } } }
-      });
-    }
-
-    function renderInc(dados) {
-      const ctx = document.getElementById('g-inc');
-      const ph = {};
-      dados.forEach(i => {
-        const h = (i.hora || '').substring(0, 5);
-        const comp = filtrarPorCategoria(i.componentes || []);
-        if (!ph[h]) ph[h] = { d: 0, dn: 0 };
-        comp.forEach(c => {
-          if (c.status === 'DEGRADED') ph[h].d++;
-          if (c.status === 'DOWN')     ph[h].dn++;
-        });
-      });
-      const labels = Object.keys(ph).sort();
-      if (gInc) gInc.destroy();
-      gInc = new Chart(ctx, {
-        type: 'bar',
-        data: { labels, datasets: [
-          { label: 'DEGRADAÇÃO', data: labels.map(h => ph[h].d),  backgroundColor: 'rgba(234,179,8,0.6)',  borderColor: '#eab308', borderWidth: 1 },
-          { label: 'DOWN',       data: labels.map(h => ph[h].dn), backgroundColor: 'rgba(239,68,68,0.6)',  borderColor: '#ef4444', borderWidth: 1 }
-        ]},
-        options: { ...CHART_OPTS, scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, beginAtZero: true, stacked: true }, x: { ...CHART_OPTS.scales.x, stacked: true } } }
-      });
-    }
-
-    function badgeHtml(status) {
-      const ic = status === 'UP' ? 'check-circle' : status === 'DEGRADED' ? 'alert-triangle' : 'x-circle';
-      const lb = status === 'UP' ? 'OPERACIONAL'  : status === 'DEGRADED' ? 'DEGRADAÇÃO'    : 'DOWN';
-      return `<span class="badge badge-${status.toLowerCase()}"><i data-lucide="${ic}"></i>${lb}</span>`;
-    }
-
-    function catTagHtml(categoria) {
-      const mapa = {
-        pagamentos:     { icon: 'landmark',     label: 'Financeiro' },
-        kyc:            { icon: 'shield-check',  label: 'KYC' },
-        infraestrutura: { icon: 'cloud',         label: 'Infra' }
-      };
-      const { icon, label } = mapa[categoria] || { icon: 'layers', label: categoria };
-      return `<span class="cat-tag ${categoria}"><i data-lucide="${icon}"></i>${label}</span>`;
-    }
-
-    function linhaHtml(r) {
-      let detalheHtml = '';
-
-      if (r.agregado && r.detalhes && r.detalhes.length > 0) {
-        const itens = r.detalhes.map(d => {
+      if (c.status === 'UP') {
+        extra = `<div class="kyc-ok"><i data-lucide="check-circle"></i>${c.mensagem || 'Todos os serviços operacionais'}</div>`;
+      } else if (c.detalhes && c.detalhes.length > 0) {
+        const itens = c.detalhes.map(d => {
           const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
-          const badge = d.status === 'DOWN'
-            ? `<span class="badge badge-down" style="font-size:9px;padding:1px 6px">DOWN</span>`
-            : `<span class="badge badge-degraded" style="font-size:9px;padding:1px 6px">DEGRADAÇÃO</span>`;
-          return `<div class="det-item ${cls}">${badge}<span class="det-name">${d.nome}</span><span class="det-motivo">${d.motivo || ''}</span></div>`;
+          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
+          return `
+            <div class="kyc-det-item ${cls}">
+              <div class="kyc-det-row">
+                <span class="kyc-det-nome">${d.nome}</span>
+                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
+              </div>
+              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
+            </div>`;
         }).join('');
-        detalheHtml = `<div class="det-list">${itens}</div>`;
-      } else if (r.agregado && r.status === 'UP') {
-        detalheHtml = `<span style="color:var(--muted);font-size:11px">${r.mensagem || 'Todos os serviços operacionais'}</span>`;
-      } else if (r.agregado && r.status !== 'UP') {
-        // Infraestrutura com incidente — mostra a mensagem do incidente
-        detalheHtml = `<span style="color:var(--yellow);font-size:11px">${r.mensagem || 'Incidente reportado'}</span>`;
-      } else if (!r.agregado && r.grupo) {
-        detalheHtml = `<span class="grupo-tag"><i data-lucide="folder"></i>${r.grupo}</span>`;
+        extra = `
+          <div class="kyc-detalhes">
+            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+            ${itens}
+          </div>`;
       } else {
-        detalheHtml = `<span style="color:var(--muted)">—</span>`;
+        extra = `<div class="kyc-warn"><i data-lucide="alert-triangle"></i>${c.mensagem || 'Instabilidade detectada'}</div>`;
       }
-
-      // Label da categoria na coluna "Serviço"
-      const catLabel = r.categoria === 'kyc' ? ' <span style="font-size:10px;color:var(--muted)">(KYC)</span>'
-                     : r.categoria === 'infraestrutura' ? ' <span style="font-size:10px;color:var(--muted)">(Infra)</span>'
-                     : '';
 
       return `
-        <tr>
-          <td style="color:#888;font-variant-numeric:tabular-nums;white-space:nowrap">${r.hora}</td>
-          <td><strong style="color:var(--text)">${r.nome}</strong>${r.agregado ? catLabel : ''}</td>
-          <td>${catTagHtml(r.categoria)}</td>
-          <td>${badgeHtml(r.status)}</td>
-          <td>${detalheHtml}</td>
-        </tr>`;
+        <div class="comp-card ${c.status.toLowerCase()}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="shield-check"></i>Processadora KYC</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+            </div>
+            ${extra}
+          </div>
+        </div>`;
     }
 
-    function renderTabela(dados) {
-      todos = [];
-      [...dados].reverse().forEach(item => {
-        filtrarPorCategoria(item.componentes || []).forEach(c => {
-          todos.push({
-            hora:      item.hora,
-            nome:      c.nome,
-            categoria: c.categoria,
-            grupo:     c.grupo || null,
-            status:    c.status,
-            original:  c.original || c.status_original || c.status,
-            agregado:  c.agregado || false,
-            detalhes:  c.detalhes || [],
-            mensagem:  c.mensagem || ''
-          });
-        });
-      });
-      visiveis = 20;
-      atualizarTabela();
+    function criarCard(c) {
+      if (c.categoria === 'infraestrutura') return criarCardInfra(c);
+      return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
     }
 
-    function atualizarTabela() {
-      const tb   = document.getElementById('tbody');
-      const wrap = document.getElementById('verMaisWrap');
-      const fatia = todos.slice(0, visiveis);
-      if (!fatia.length) {
-        tb.innerHTML = `<tr><td colspan="5" class="loading-td">Nenhum dado para o filtro selecionado.</td></tr>`;
-        wrap.style.display = 'none'; return;
+    // ── Card de Infraestrutura (Cloudflare + AWS) ──
+    // Comportamento idêntico: incidente ativo → amarelo/vermelho + aviso inline + botão de log
+    function criarCardInfra(c) {
+      const att = fmt(c.atualizado_em);
+
+      // Incidente ativo vinculado a este card
+      const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
+        ? c.incidentes_ativos[0]
+        : incidentesAtivos.find(i =>
+            i.provedor === 'Cloudflare' && i.status !== 'resolved'
+          );
+
+      const temIncidente  = !!inc || c.incidente_ativo;
+      const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+      const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+      const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+
+      // Botão de log do incidente
+      const incParaModal = inc || incidentesAtivos.find(i => i.provedor === 'Cloudflare');
+      const btn = incParaModal
+        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+        : '';
+
+      // Aviso inline quando há incidente mas componente está UP
+      let incidenteInline = '';
+      if (inc && c.status === 'UP') {
+        const lastUpdate = inc.updates && inc.updates[0];
+        incidenteInline = `
+          <div class="inc-aviso">
+            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+          </div>`;
       }
-      tb.innerHTML = fatia.map(linhaHtml).join('');
-      wrap.style.display = visiveis < todos.length ? 'block' : 'none';
+
+      // Detalhes de serviços afetados quando status != UP
+      let detalhesHtml = '';
+      if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
+        const itens = c.detalhes.map(d => {
+          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
+          return `
+            <div class="kyc-det-item ${cls}">
+              <div class="kyc-det-row">
+                <span class="kyc-det-nome">${d.nome}</span>
+                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
+              </div>
+              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
+            </div>`;
+        }).join('');
+        detalhesHtml = `
+          <div class="kyc-detalhes">
+            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+            ${itens}
+          </div>`;
+      } else if (c.status === 'UP' && !temIncidente) {
+        detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
+      }
+
+      return `
+        <div class="comp-card ${statusFinal}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="card-meta">
+              <div class="card-meta-item"><i data-lucide="cloud"></i>${c.provedor}</div>
+              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+            </div>
+            ${detalhesHtml}
+            ${incidenteInline}
+            ${btn}
+          </div>
+        </div>`;
+    }
+
+    function render(dados) {
+      document.getElementById('ultimaAtt').textContent = new Date(dados.timestamp).toLocaleTimeString('pt-BR');
+      const { resumo, geral, incidentes = [], incidentes_ativos = [] } = dados;
+      incidentesAtivos = incidentes;
+
+      // ── FONTE DE VERDADE: componentes_dashboard ──
+      const dashboard = dados.componentes_dashboard || dados.componentes || [];
+
+      // Banner
+      const banner = document.getElementById('banner');
+      const ind    = geral?.indicator || 'none';
+      let cls = 'up', ic = 'check-circle', msg = 'Todos os sistemas operacionais';
+      if (resumo.down > 0 || ind === 'critical' || ind === 'major') {
+        cls = 'down'; ic = 'x-circle';
+        msg = resumo.down > 0 ? `${resumo.down} sistema${resumo.down>1?'s':''} fora do ar` : 'Interrupção confirmada pela StatusPage';
+      } else if (resumo.degraded > 0 || ind === 'minor' || ind === 'maintenance') {
+        cls = 'degraded'; ic = 'alert-triangle';
+        // Se há incidente ativo mas componente ainda operational
+        if (resumo.degraded === 0 && resumo.down === 0 && incidentes_ativos.length > 0) {
+          msg = `${incidentes_ativos.length} incidente${incidentes_ativos.length>1?'s':''} ativo${incidentes_ativos.length>1?'s':''} reportado${incidentes_ativos.length>1?'s':''} pela Okto`;
+        } else {
+          msg = resumo.degraded > 0 ? `${resumo.degraded} sistema${resumo.degraded>1?'s':''} com degradação detectada` : 'Degradação ou manutenção em andamento';
+        }
+      }
+      banner.className = 'hero-banner ' + cls;
+      banner.innerHTML = `<i data-lucide="${ic}"></i><span>${msg}</span>`;
+
+      // Chips
+      const dUp  = dashboard.filter(c => c.status === 'UP' && !c.incidente_ativo).length;
+      const dDeg = dashboard.filter(c => c.status === 'DEGRADED').length;
+      const dDwn = dashboard.filter(c => c.status === 'DOWN').length;
+      const dInc = dashboard.filter(c => c.incidente_ativo).length;
+      document.getElementById('chips').innerHTML = `
+        <div class="chip chip-up"><i data-lucide="check-circle"></i>OPERACIONAL: ${dUp}</div>
+        ${dDeg > 0 ? `<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i>DEGRADAÇÃO: ${dDeg}</div>` : ''}
+        ${dDwn > 0 ? `<div class="chip chip-down"><i data-lucide="x-circle"></i>DOWN: ${dDwn}</div>` : ''}
+        ${dInc > 0 ? `<div class="chip chip-incident"><i data-lucide="file-warning"></i>INCIDENTE: ${dInc}</div>` : ''}
+        <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${dashboard.length}</div>
+      `;
+
+      // Separação das seções
+      // APIs & Infra → KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit)
+      // Infraestrutura → Cloudflare
+      // Instituições → bancos Okto com grupo
+      const apis   = dashboard.filter(c => (c.agregado && c.categoria === 'kyc')
+                                        || (c.categoria === 'pagamentos' && !c.grupo));
+      const infra  = dashboard.filter(c => c.categoria === 'infraestrutura');
+      const bancos = dashboard.filter(c => c.categoria === 'pagamentos' && c.grupo);
+
+      document.getElementById('count-apis').textContent   = `${apis.length} componente${apis.length!==1?'s':''}`;
+      document.getElementById('count-infra').textContent  = `${infra.length} provedor${infra.length!==1?'es':''}`;
+      document.getElementById('count-bancos').textContent = `${bancos.length} instituiç${bancos.length!==1?'ões':'ão'}`;
+
+      document.getElementById('grid-apis').innerHTML   = apis.length   ? apis.map(criarCard).join('')   : '<div class="loading-grid">Nenhum dado</div>';
+      document.getElementById('grid-infra').innerHTML  = infra.length  ? infra.map(criarCard).join('')  : '<div class="loading-grid">Nenhum dado</div>';
+      document.getElementById('grid-bancos').innerHTML = bancos.length ? bancos.map(criarCard).join('') : '<div class="loading-grid">Nenhum dado</div>';
+
       lucide.createIcons();
     }
 
-    function verMais() { visiveis += 20; atualizarTabela(); }
-
-    function aplicarFiltros() {
-      const c = document.getElementById('filtro-componente').value;
-      const s = document.getElementById('filtro-inicio').value;
-      const e = document.getElementById('filtro-fim').value;
-      let p = '?';
-      if (s) p += `inicio=${s}&`;
-      if (e) p += `fim=${e}&`;
-      if (c && !c.startsWith('agregado-')) p += `componente=${c}&`;
-      carregarHistorico(p);
+    // Modal de incidente
+    function abrirModal(id) {
+      const inc = incidentesAtivos.find(i => i.id === id);
+      if (!inc) return;
+      const deg = inc.impacto === 'minor' || inc.impacto === 'maintenance';
+      document.getElementById('modalBar').className    = 'modal-top-bar' + (deg ? ' degraded' : '');
+      document.getElementById('modalTitulo').textContent = inc.nome;
+      document.getElementById('modalSub').textContent    = `Atualizado em ${fmt(inc.atualizado)}`;
+      const impMap = { none:'pill-muted|Nenhum', minor:'pill-yellow|Menor', major:'pill-red|Grave', critical:'pill-red|Crítico', maintenance:'pill-yellow|Manutenção' };
+      const [impCls, impLbl] = (impMap[inc.impacto] || 'pill-muted|' + inc.impacto).split('|');
+      const stMap = { investigating:'pill-red', identified:'pill-yellow', monitoring:'pill-yellow', resolved:'pill-green' };
+      document.getElementById('modalPills').innerHTML = `
+        <span class="modal-pill ${impCls}"><i data-lucide="alert-triangle"></i>${impLbl}</span>
+        <span class="modal-pill ${stMap[inc.status]||'pill-muted'}"><i data-lucide="circle"></i>${inc.status}</span>
+        ${inc.url ? `<a href="${inc.url}" target="_blank" class="modal-pill pill-muted"><i data-lucide="external-link"></i>StatusPage</a>` : ''}
+      `;
+      const ups = inc.updates || [];
+      document.getElementById('modalUpdates').innerHTML = ups.length
+        ? ups.map(u => `
+            <div class="update-item ${u.status==='resolved'?'resolved':u.status==='investigating'?'investigating':''}">
+              <div class="update-status">${u.status}</div>
+              <div class="update-body">${u.body||'—'}</div>
+              <div class="update-time">${fmt(u.updated_at)}</div>
+            </div>`).join('')
+        : `<div class="modal-no-updates">Nenhuma atualização registrada para este incidente.</div>`;
+      document.getElementById('modalOverlay').classList.add('open');
+      lucide.createIcons();
     }
 
-    function exportarCSV() {
-      const a = document.createElement('a');
-      a.href = '/api/historico/exportar'; a.download = '';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      const fb = document.getElementById('export-fb');
-      fb.style.display = 'inline';
-      setTimeout(() => { fb.style.display = 'none'; }, 3000);
-    }
+    function fecharModalBtn() { document.getElementById('modalOverlay').classList.remove('open'); }
+    function fecharModal(e)   { if (e.target === document.getElementById('modalOverlay')) fecharModalBtn(); }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModalBtn(); });
 
-    init();
-    setInterval(() => {
-      if (!document.getElementById('filtro-componente').value &&
-          !document.getElementById('filtro-inicio').value &&
-          !document.getElementById('filtro-fim').value) carregarHistorico();
-    }, 60000);
+    setTimeout(() => {
+      conectarWS();
+      fetch('/api/status').then(r => r.json()).then(d => {
+        if (d?.componentes_dashboard || d?.componentes) render(d);
+      }).catch(() => {});
+    }, 300);
   </script>
 </body>
 </html>
