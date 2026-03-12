@@ -65,16 +65,6 @@ const CLOUDFLARE_CONFIG = {
   categoria:  'infraestrutura'
 };
 
-// AWS — infraestrutura crítica
-// Formato próprio: array de eventos ativos em data.json
-// status numérico: 0=resolvido 1=investigando 2=identificado 3=monitorando
-// Filtra apenas eventos com status > 0 (ativos)
-const AWS_CONFIG = {
-  nome: 'AWS',
-  url:  'https://status.aws.amazon.com/data.json',
-  categoria: 'infraestrutura'
-};
-
 // Componentes da Okto a ignorar
 const IGNORADOS_OKTO = ['RTM', 'JD'];
 
