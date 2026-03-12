@@ -697,9 +697,6 @@ function mapearStatusAWS(statusNum) {
 async function consultarAWS() {
   console.log(`[AWS] Consultando data.json...`);
 
-  const { data, sucesso, tipoErro } = await httpGet(AWS_CONFIG.url);
-
-  // Resultado padrão de erro
   const erroCard = (msg) => ({
     card: {
       id: 'agregado-AWS', nome: 'AWS', provedor: 'AWS',
@@ -707,33 +704,42 @@ async function consultarAWS() {
       mensagem: msg, detalhes: [], incidente_ativo: false,
       incidentes_ativos: [], atualizado_em: new Date().toISOString(), agregado: true
     },
-    componentesInternos: [], incidentes: [], incidentesAtivos: [], manutencoes: []
+    componentesInternos: [{
+      id: 'AWS-geral', nome: 'AWS', provedor: 'AWS', categoria: 'infraestrutura',
+      grupo: null, status: 'DEGRADED', status_original: 'error', label: 'DEGRADAÇÃO',
+      descricao: msg, atualizado_em: new Date().toISOString()
+    }],
+    incidentes: [], incidentesAtivos: [], manutencoes: []
   });
 
-  if (!sucesso || !data) return erroCard(`Não foi possível verificar (${tipoErro})`);
-
-  // Normaliza o array de eventos — data.json pode vir como string (UTF-16) ou array
+  // data.json usa UTF-16 LE com BOM — precisa de responseType arraybuffer
   let eventos = [];
-  try {
-    if (Array.isArray(data)) {
-      eventos = data;
-    } else if (typeof data === 'string') {
-      // Remove BOM UTF-16 se presente e faz parse manual
-      const limpo = data.replace(/^\uFEFF/, '').trim();
-      eventos = JSON.parse(limpo);
-      if (!Array.isArray(eventos)) eventos = [];
-    } else if (data && typeof data === 'object') {
-      // Tenta achar o array dentro do objeto
-      const val = Object.values(data).find(v => Array.isArray(v));
-      eventos = val || [];
+  let tentativa = 1;
+  while (tentativa <= MAX_RETRIES) {
+    try {
+      console.log(`[AWS] Tentativa ${tentativa}/${MAX_RETRIES}...`);
+      const resp = await axios.get(AWS_CONFIG.url, {
+        timeout:      TIMEOUT_MS,
+        responseType: 'arraybuffer',
+        headers:      { 'User-Agent': 'PixHealthMonitor/1.0' }
+      });
+      // Decodifica UTF-16 LE (BOM 0xFF 0xFE no início)
+      const buf    = Buffer.from(resp.data);
+      const texto  = buf.toString('utf16le').replace(/^\uFEFF/, '').trim();
+      const parsed = JSON.parse(texto);
+      eventos = (Array.isArray(parsed) ? parsed : []).filter(e => e && typeof e === 'object');
+      console.log(`[AWS] ✓ ${eventos.length} evento(s) no feed`);
+      break;
+    } catch (e) {
+      console.error(`[AWS] ✗ Tentativa ${tentativa} falhou: ${e.message}`);
+      if (tentativa < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+        tentativa++;
+      } else {
+        return erroCard(`Erro ao processar resposta da AWS (${e.message})`);
+      }
     }
-    eventos = eventos.filter(e => e && typeof e === 'object');
-  } catch (e) {
-    console.error(`[AWS] ✗ Erro ao parsear: ${e.message}`);
-    return erroCard('Erro ao processar resposta da AWS');
   }
-
-  console.log(`[AWS] ✓ ${eventos.length} evento(s) no feed`);
 
   // status numérico: 0=resolvido, 1=investigando, 2=identificado, 3=monitorando
   const eventosAtivos    = eventos.filter(e => parseInt(e.status || 0) > 0);
