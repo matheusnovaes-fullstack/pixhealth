@@ -128,7 +128,21 @@
     .chip-up       { background: var(--green-dim);  border-color: var(--green-bd);  color: var(--green); }
     .chip-degraded { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
     .chip-down     { background: var(--red-dim);    border-color: var(--red-bd);    color: var(--red); }
+    .chip-incident { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
     .chip-total    { background: var(--surface);    border-color: var(--border-md); color: var(--muted); }
+
+    /* Aviso de incidente ativo inline no card (componente ainda operational) */
+    .inc-aviso {
+      margin-top: 10px; padding: 10px 12px; border-radius: 7px;
+      background: var(--yellow-dim); border: 1px solid var(--yellow-bd);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .inc-aviso-titulo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700; color: var(--yellow);
+    }
+    .inc-aviso-titulo svg { width: 11px; height: 11px; flex-shrink: 0; }
+    .inc-aviso-body { font-size: 11px; color: var(--text-2); line-height: 1.5; }
 
     /* ─── SEÇÃO ─── */
     .section { margin-bottom: 36px; }
@@ -163,6 +177,13 @@
     .comp-card.up       { border-color: var(--green-bd); }
     .comp-card.degraded { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
     .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red    2s infinite; }
+    /* warning = componente operational mas com incidente ativo reportado */
+    .comp-card.warning  { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
+    .comp-card.warning  .card-accent  { background: var(--yellow); animation: bar-blink 2s infinite; }
+    .comp-card.warning  .card-dot     { background: var(--yellow); animation: blink 2s infinite; }
+    .comp-card.warning  .status-badge { background: var(--yellow-dim); color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.warning  .btn-incidente{ color: var(--yellow); border-color: var(--yellow-bd); }
+    .comp-card.warning  .btn-incidente:hover { background: var(--yellow-dim); }
     @keyframes pulse-red    { 0%,100% { border-color:var(--red-bd);    box-shadow:none; } 50% { border-color:var(--red);    box-shadow:0 0 16px var(--red-glow); } }
     @keyframes pulse-yellow { 0%,100% { border-color:var(--yellow-bd); box-shadow:none; } 50% { border-color:var(--yellow); box-shadow:0 0 16px var(--yellow-glow); } }
     @keyframes blink        { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
@@ -434,29 +455,58 @@
     // ── Card individual Okto ──
     function criarCardOkto(c) {
       const att = fmt(c.atualizado_em);
-      const inc = c.status !== 'UP'
-        ? incidentesAtivos.find(i => i.provedor === c.provedor &&
-            (i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
-             c.nome.toLowerCase().includes(i.nome.toLowerCase())))
-          || (incidentesAtivos.filter(i => i.provedor === c.provedor).length === 1
-              ? incidentesAtivos.find(i => i.provedor === c.provedor) : null)
-        : null;
-      const btn = inc
-        ? `<button class="btn-incidente" onclick="abrirModal('${inc.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+
+      // Busca incidente ativo vinculado a este componente
+      const inc = incidentesAtivos.find(i =>
+        i.provedor === 'Okto Payments' &&
+        i.status !== 'resolved' &&
+        (
+          (i.afetados && i.afetados.some(a => a.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(a.toLowerCase()))) ||
+          i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
+          c.nome.toLowerCase().includes(i.nome.toLowerCase())
+        )
+      );
+
+      // Se tem incidente ativo, card fica amarelo mesmo com status UP
+      const temIncidente = !!inc || c.incidente_ativo;
+      const statusFinal  = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+      const labelFinal   = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+      const icFinal      = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+
+      // Botão do log — aparece quando há incidente (ativo ou recente)
+      const incParaModal = inc || incidentesAtivos.find(i =>
+        i.provedor === 'Okto Payments' &&
+        (i.nome.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(i.nome.toLowerCase()))
+      );
+      const btn = incParaModal
+        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
         : '';
+
+      // Texto do incidente ativo inline (mesmo com componente operational)
+      let incidenteInline = '';
+      if (inc && c.status === 'UP') {
+        const lastUpdate = inc.updates && inc.updates[0];
+        incidenteInline = `
+          <div class="inc-aviso">
+            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+          </div>`;
+      }
+
       return `
-        <div class="comp-card ${c.status.toLowerCase()}">
+        <div class="comp-card ${statusFinal}">
           <div class="card-accent"></div>
           <div class="card-body">
             <div class="card-top">
               <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
-              <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
+              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
             </div>
             <div class="card-divider"></div>
             <div class="card-meta">
               <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original || c.status.toLowerCase()}</div>
               <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
             </div>
+            ${incidenteInline}
             ${btn}
           </div>
         </div>`;
@@ -517,11 +567,10 @@
 
     function render(dados) {
       document.getElementById('ultimaAtt').textContent = new Date(dados.timestamp).toLocaleTimeString('pt-BR');
-      const { resumo, geral, incidentes = [] } = dados;
+      const { resumo, geral, incidentes = [], incidentes_ativos = [] } = dados;
       incidentesAtivos = incidentes;
 
       // ── FONTE DE VERDADE: componentes_dashboard ──
-      // Contém exatamente os cards da tela — nunca mais, nunca menos
       const dashboard = dados.componentes_dashboard || dados.componentes || [];
 
       // Banner
@@ -533,25 +582,30 @@
         msg = resumo.down > 0 ? `${resumo.down} sistema${resumo.down>1?'s':''} fora do ar` : 'Interrupção confirmada pela StatusPage';
       } else if (resumo.degraded > 0 || ind === 'minor' || ind === 'maintenance') {
         cls = 'degraded'; ic = 'alert-triangle';
-        msg = resumo.degraded > 0 ? `${resumo.degraded} sistema${resumo.degraded>1?'s':''} com degradação detectada` : 'Degradação ou manutenção em andamento';
+        // Se há incidente ativo mas componente ainda operational
+        if (resumo.degraded === 0 && resumo.down === 0 && incidentes_ativos.length > 0) {
+          msg = `${incidentes_ativos.length} incidente${incidentes_ativos.length>1?'s':''} ativo${incidentes_ativos.length>1?'s':''} reportado${incidentes_ativos.length>1?'s':''} pela Okto`;
+        } else {
+          msg = resumo.degraded > 0 ? `${resumo.degraded} sistema${resumo.degraded>1?'s':''} com degradação detectada` : 'Degradação ou manutenção em andamento';
+        }
       }
       banner.className = 'hero-banner ' + cls;
       banner.innerHTML = `<i data-lucide="${ic}"></i><span>${msg}</span>`;
 
-      // Chips — conta pelos cards do dashboard (não pelos componentes internos)
-      const dUp  = dashboard.filter(c => c.status === 'UP').length;
+      // Chips
+      const dUp  = dashboard.filter(c => c.status === 'UP' && !c.incidente_ativo).length;
       const dDeg = dashboard.filter(c => c.status === 'DEGRADED').length;
       const dDwn = dashboard.filter(c => c.status === 'DOWN').length;
+      const dInc = dashboard.filter(c => c.incidente_ativo).length;
       document.getElementById('chips').innerHTML = `
         <div class="chip chip-up"><i data-lucide="check-circle"></i>OPERACIONAL: ${dUp}</div>
         ${dDeg > 0 ? `<div class="chip chip-degraded"><i data-lucide="alert-triangle"></i>DEGRADAÇÃO: ${dDeg}</div>` : ''}
         ${dDwn > 0 ? `<div class="chip chip-down"><i data-lucide="x-circle"></i>DOWN: ${dDwn}</div>` : ''}
+        ${dInc > 0 ? `<div class="chip chip-incident"><i data-lucide="file-warning"></i>INCIDENTE: ${dInc}</div>` : ''}
         <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${dashboard.length}</div>
       `;
 
-      // ── Separação das seções ──
-      // APIs & Infra → KYC (agregado) + Okto sem grupo (Central Bank, API Deposits, API Withdrawals)
-      // Instituições → Okto com grupo (Bradesco, Itaú, Nubank, etc.)
+      // Separação das seções
       const apis   = dashboard.filter(c => c.agregado || (c.categoria === 'pagamentos' && !c.grupo));
       const bancos = dashboard.filter(c => c.categoria === 'pagamentos' && c.grupo);
 
