@@ -699,125 +699,118 @@ async function consultarAWS() {
 
   const { data, sucesso, tipoErro } = await httpGet(AWS_CONFIG.url);
 
-  if (!sucesso || !data) {
-    console.error(`[AWS] ✗ Falha: ${tipoErro}`);
-    return {
-      card: {
-        id:              'agregado-AWS',
-        nome:            'AWS',
-        provedor:        'AWS',
-        categoria:       'infraestrutura',
-        status:          'DEGRADED',
-        label:           'DEGRADAÇÃO',
-        mensagem:        `Não foi possível verificar o status (${tipoErro})`,
-        detalhes:        [],
-        incidente_ativo:  false,
-        incidentes_ativos: [],
-        atualizado_em:   new Date().toISOString(),
-        agregado:        true
-      },
-      componentesInternos: [],
-      incidentes:          [],
-      incidentesAtivos:    [],
-      manutencoes:         []
-    };
+  // Resultado padrão de erro
+  const erroCard = (msg) => ({
+    card: {
+      id: 'agregado-AWS', nome: 'AWS', provedor: 'AWS',
+      categoria: 'infraestrutura', status: 'DEGRADED', label: 'DEGRADAÇÃO',
+      mensagem: msg, detalhes: [], incidente_ativo: false,
+      incidentes_ativos: [], atualizado_em: new Date().toISOString(), agregado: true
+    },
+    componentesInternos: [], incidentes: [], incidentesAtivos: [], manutencoes: []
+  });
+
+  if (!sucesso || !data) return erroCard(`Não foi possível verificar (${tipoErro})`);
+
+  // Normaliza o array de eventos — data.json pode vir como string (UTF-16) ou array
+  let eventos = [];
+  try {
+    if (Array.isArray(data)) {
+      eventos = data;
+    } else if (typeof data === 'string') {
+      // Remove BOM UTF-16 se presente e faz parse manual
+      const limpo = data.replace(/^\uFEFF/, '').trim();
+      eventos = JSON.parse(limpo);
+      if (!Array.isArray(eventos)) eventos = [];
+    } else if (data && typeof data === 'object') {
+      // Tenta achar o array dentro do objeto
+      const val = Object.values(data).find(v => Array.isArray(v));
+      eventos = val || [];
+    }
+    eventos = eventos.filter(e => e && typeof e === 'object');
+  } catch (e) {
+    console.error(`[AWS] ✗ Erro ao parsear: ${e.message}`);
+    return erroCard('Erro ao processar resposta da AWS');
   }
 
-  // data.json retorna um array de eventos
-  const eventos = Array.isArray(data) ? data : [];
+  console.log(`[AWS] ✓ ${eventos.length} evento(s) no feed`);
 
-  // Eventos ATIVOS: status > 0 (0 = resolvido)
-  const eventosAtivos = eventos.filter(e => parseInt(e.status) > 0);
+  // status numérico: 0=resolvido, 1=investigando, 2=identificado, 3=monitorando
+  const eventosAtivos    = eventos.filter(e => parseInt(e.status || 0) > 0);
+  const eventosResolvidos = eventos.filter(e => parseInt(e.status || 0) === 0).slice(0, 5);
 
-  // Eventos recentes resolvidos (para histórico)
-  const eventosResolvidos = eventos
-    .filter(e => parseInt(e.status) === 0)
-    .slice(0, 5);
-
-  // Monta incidentes no formato padrão do sistema
-  function eventoParaIncidente(e) {
-    const logs = (e.event_log || []).slice().reverse(); // mais recente primeiro
+  // Converte evento AWS para o formato padrão de incidente do sistema
+  const converterEvento = (e) => {
+    const statusNum = parseInt(e.status || 0);
+    const tsEvento  = e.date ? new Date(parseInt(e.date) * 1000).toISOString() : new Date().toISOString();
+    const logs = Array.isArray(e.event_log) ? [...e.event_log].reverse() : [];
     return {
-      id:         `AWS-${e.arn || e.date}`,
+      id:         `AWS-${(e.arn || e.date || Math.random()).toString().replace(/[^a-zA-Z0-9]/g, '_')}`,
       provedor:   'AWS',
-      nome:       e.summary || e.service_name || 'Evento AWS',
-      status:     parseInt(e.status) === 0 ? 'resolved' : mapearStatusAWS(e.status).toLowerCase(),
-      impacto:    parseInt(e.status) === 1 ? 'major' : 'minor',
-      atualizado: e.date ? new Date(parseInt(e.date) * 1000).toISOString() : new Date().toISOString(),
+      nome:       String(e.summary || e.service_name || 'Evento AWS'),
+      status:     statusNum === 0 ? 'resolved' : mapearStatusAWS(statusNum).toLowerCase(),
+      impacto:    statusNum === 1 ? 'major' : 'minor',
+      atualizado: tsEvento,
       url:        null,
-      afetados:   [`${e.service_name} (${e.region_name || 'Global'})`],
+      afetados:   [`${e.service_name || 'AWS'} (${e.region_name || 'Global'})`],
       updates:    logs.map(l => ({
-        status:     mapearStatusAWS(l.status).toLowerCase(),
-        body:       l.message || l.summary || '',
-        updated_at: l.timestamp ? new Date(parseInt(l.timestamp) * 1000).toISOString() : null
+        status:     mapearStatusAWS(parseInt(l.status || 0)).toLowerCase(),
+        body:       String(l.message || l.summary || ''),
+        updated_at: l.timestamp ? new Date(parseInt(l.timestamp) * 1000).toISOString() : tsEvento
       }))
     };
-  }
+  };
 
-  const incidentesAtivos    = eventosAtivos.map(eventoParaIncidente);
-  const incidentesResolvidos = eventosResolvidos.map(eventoParaIncidente);
+  const incidentesAtivos    = eventosAtivos.map(converterEvento);
+  const incidentesResolvidos = eventosResolvidos.map(converterEvento);
 
-  // Status do card — baseado nos eventos ativos
   let statusGeral = 'UP';
   let labelGeral  = 'OPERACIONAL';
   let mensagem    = 'Nenhum incidente ativo';
 
   if (eventosAtivos.length > 0) {
-    const temCritico = eventosAtivos.some(e => parseInt(e.status) === 1);
+    const temCritico = eventosAtivos.some(e => parseInt(e.status || 0) === 1);
     statusGeral = temCritico ? 'DOWN' : 'DEGRADED';
     labelGeral  = temCritico ? 'DOWN' : 'DEGRADAÇÃO';
 
-    // Lista serviços afetados únicos
     const servicos = [...new Set(eventosAtivos.map(e =>
-      `${e.service_name}${e.region_name ? ` (${e.region_name})` : ''}`
+      `${e.service_name || 'AWS'}${e.region_name ? ` (${e.region_name})` : ''}`
     ))];
     mensagem = servicos.length === 1
       ? servicos[0]
-      : `${eventosAtivos.length} evento(s) ativo(s): ${servicos.slice(0, 3).join(', ')}${servicos.length > 3 ? '...' : ''}`;
+      : `${eventosAtivos.length} evento(s): ${servicos.slice(0, 3).join(', ')}${servicos.length > 3 ? '...' : ''}`;
 
     console.log(`[AWS] ⚠️  ${eventosAtivos.length} evento(s) ativo(s):`);
-    eventosAtivos.forEach(e => console.log(`  ↳ [${mapearStatusAWS(e.status)}] ${e.service_name} — ${e.region_name} — ${e.summary}`));
+    eventosAtivos.forEach(e => console.log(
+      `  ↳ [${mapearStatusAWS(parseInt(e.status || 0))}] ${e.service_name || '?'} — ${e.region_name || 'Global'} — ${e.summary || ''}`
+    ));
   } else {
     console.log(`[AWS] ✓ Nenhum evento ativo`);
   }
 
-  // Componente interno com ID fixo para rastreamento de alertas
-  const componentesInternos = [{
-    id:              'AWS-geral',
-    nome:            'AWS',
-    provedor:        'AWS',
-    categoria:       'infraestrutura',
-    grupo:           null,
-    status:          statusGeral,
-    status_original: statusGeral.toLowerCase(),
-    label:           labelGeral,
-    descricao:       mensagem,
-    atualizado_em:   new Date().toISOString()
-  }];
-
   return {
     card: {
-      id:               'agregado-AWS',
-      nome:             'AWS',
-      provedor:         'AWS',
-      categoria:        'infraestrutura',
-      status:           statusGeral,
-      label:            labelGeral,
-      mensagem,
-      detalhes:         [],
-      incidente_ativo:  eventosAtivos.length > 0,
-      incidentes_ativos: incidentesAtivos,
-      atualizado_em:    new Date().toISOString(),
-      agregado:         true
+      id: 'agregado-AWS', nome: 'AWS', provedor: 'AWS',
+      categoria: 'infraestrutura', status: statusGeral, label: labelGeral,
+      mensagem, detalhes: [], incidente_ativo: eventosAtivos.length > 0,
+      incidentes_ativos: incidentesAtivos, atualizado_em: new Date().toISOString(), agregado: true
     },
-    componentesInternos,
-    incidentes:       [...incidentesAtivos, ...incidentesResolvidos],
+    componentesInternos: [{
+      id: 'AWS-geral', nome: 'AWS', provedor: 'AWS', categoria: 'infraestrutura',
+      grupo: null, status: statusGeral, status_original: statusGeral.toLowerCase(),
+      label: labelGeral, descricao: mensagem, atualizado_em: new Date().toISOString()
+    }],
+    incidentes:      [...incidentesAtivos, ...incidentesResolvidos],
     incidentesAtivos,
-    manutencoes:      []
+    manutencoes:     []
   };
 }
 
-// ─────────────────────────────────────────────(componente, statusNovo, statusAnterior) {
+// ─────────────────────────────────────────────
+// ALERTAS — SLACK
+// ─────────────────────────────────────────────
+
+async function enviarSlack(componente, statusNovo, statusAnterior) {
   const emoji = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
   const label = { DOWN: 'FORA DO AR', DEGRADED: 'DEGRADAÇÃO', UP: 'OPERACIONAL' };
 
