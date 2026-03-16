@@ -72,8 +72,8 @@ const IGNORADOS_OKTO = ['RTM', 'JD'];
 // CONFIGURAÇÃO DE ALERTAS
 // ─────────────────────────────────────────────
 
-const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
-const SLACK_MENTIONS = ['U09G386SN01', 'U09BNJL6E2X', 'U09QSBQ7SEP'];
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK
+const SLACK_MENTIONS = process.env.SLACK_MENTION ? process.env.SLACK_MENTION.split(',') : []
 
 const ALERT_EMAIL_TO   = process.env.ALERT_EMAIL_TO   || null;
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || null;
