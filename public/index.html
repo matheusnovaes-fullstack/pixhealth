@@ -131,7 +131,7 @@
     .chip-incident { background: var(--yellow-dim); border-color: var(--yellow-bd); color: var(--yellow); }
     .chip-total    { background: var(--surface);    border-color: var(--border-md); color: var(--muted); }
 
-    /* Aviso de incidente ativo inline no card (componente ainda operational) */
+    /* Aviso de incidente ativo inline no card */
     .inc-aviso {
       margin-top: 10px; padding: 10px 12px; border-radius: 7px;
       background: var(--yellow-dim); border: 1px solid var(--yellow-bd);
@@ -177,7 +177,6 @@
     .comp-card.up       { border-color: var(--green-bd); }
     .comp-card.degraded { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
     .comp-card.down     { border-color: var(--red-bd);    animation: pulse-red    2s infinite; }
-    /* warning = componente operational mas com incidente ativo reportado */
     .comp-card.warning  { border-color: var(--yellow-bd); animation: pulse-yellow 3s infinite; }
     .comp-card.warning  .card-accent  { background: var(--yellow); animation: bar-blink 2s infinite; }
     .comp-card.warning  .card-dot     { background: var(--yellow); animation: blink 2s infinite; }
@@ -214,7 +213,7 @@
     .card-meta-item { display: flex; align-items: center; gap: 4px; font-family: var(--mono); }
     .card-meta-item svg { width: 10px; height: 10px; }
 
-    /* ─── KYC: área extra do card ─── */
+    /* ─── KYC ─── */
     .kyc-ok {
       margin-top: 10px; padding: 8px 12px; border-radius: 7px;
       font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px;
@@ -227,7 +226,6 @@
       background: var(--yellow-dim); border: 1px solid var(--yellow-bd); color: var(--yellow);
     }
     .kyc-warn svg { width: 11px; height: 11px; flex-shrink: 0; }
-
     .kyc-detalhes { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
     .kyc-det-label {
       font-size: 10px; font-weight: 700; color: var(--muted);
@@ -252,7 +250,7 @@
     .kyc-det-badge.degraded { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow-bd); }
     .kyc-det-motivo { font-size: 11px; color: var(--muted); line-height: 1.5; }
 
-    /* ─── BOTÃO INCIDENTE (Okto) ─── */
+    /* ─── BOTÃO INCIDENTE ─── */
     .btn-incidente {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       margin-top: 13px; padding: 8px 14px; border-radius: 7px;
@@ -374,7 +372,6 @@
 
     <div class="resumo-chips" id="chips"></div>
 
-    <!-- APIs & Infra: 3 KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit) -->
     <div class="section">
       <div class="section-header">
         <div class="section-icon"><i data-lucide="zap"></i></div>
@@ -386,7 +383,6 @@
       </div>
     </div>
 
-    <!-- Infraestrutura: Cloudflare -->
     <div class="section">
       <div class="section-header">
         <div class="section-icon"><i data-lucide="cloud"></i></div>
@@ -398,7 +394,6 @@
       </div>
     </div>
 
-    <!-- Instituições: 10 bancos da Okto (têm grupo) -->
     <div class="section">
       <div class="section-header">
         <div class="section-icon"><i data-lucide="landmark"></i></div>
@@ -440,6 +435,50 @@
     let ws, tentativas = 0;
     let incidentesAtivos = [];
 
+    // ── ALERTA SONORO ────────────────────────────────────────
+    const jaAlertouSom = new Set();
+
+    function tocarAlerta(tipo) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ganho = ctx.createGain();
+        ganho.connect(ctx.destination);
+        ganho.gain.setValueAtTime(0, ctx.currentTime);
+        ganho.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.05);
+        ganho.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5);
+
+        // DOWN → tons graves urgentes | DEGRADED → tons médios sutis
+        const freqs = tipo === 'DOWN'
+          ? [220, 185, 155]
+          : [440, 494, 440];
+
+        freqs.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.6);
+          osc.connect(ganho);
+          osc.start(ctx.currentTime + i * 0.6);
+          osc.stop(ctx.currentTime + i * 0.6 + 0.55);
+        });
+      } catch (e) {
+        console.warn('Áudio não disponível:', e.message);
+      }
+    }
+
+    function verificarAlertaSonoro(dashboard) {
+      if (!dashboard) return;
+      dashboard.forEach(c => {
+        if ((c.status === 'DEGRADED' || c.status === 'DOWN') && !jaAlertouSom.has(c.id)) {
+          jaAlertouSom.add(c.id);
+          tocarAlerta(c.status);
+        }
+        if (c.status === 'UP') {
+          jaAlertouSom.delete(c.id); // reseta para tocar novamente se cair de novo
+        }
+      });
+    }
+    // ────────────────────────────────────────────────────────
+
     function conectarWS() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(proto + '//' + location.host);
@@ -464,11 +503,8 @@
       return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
-    // ── Card individual Okto ──
     function criarCardOkto(c) {
       const att = fmt(c.atualizado_em);
-
-      // Busca incidente ativo vinculado a este componente
       const inc = incidentesAtivos.find(i =>
         i.provedor === 'Okto Payments' &&
         i.status !== 'resolved' &&
@@ -478,14 +514,10 @@
           c.nome.toLowerCase().includes(i.nome.toLowerCase())
         )
       );
-
-      // Se tem incidente ativo, card fica amarelo mesmo com status UP
       const temIncidente = !!inc || c.incidente_ativo;
       const statusFinal  = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
       const labelFinal   = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
       const icFinal      = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
-
-      // Botão do log — aparece quando há incidente (ativo ou recente)
       const incParaModal = inc || incidentesAtivos.find(i =>
         i.provedor === 'Okto Payments' &&
         (i.nome.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(i.nome.toLowerCase()))
@@ -493,8 +525,6 @@
       const btn = incParaModal
         ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
         : '';
-
-      // Texto do incidente ativo inline (mesmo com componente operational)
       let incidenteInline = '';
       if (inc && c.status === 'UP') {
         const lastUpdate = inc.updates && inc.updates[0];
@@ -504,7 +534,6 @@
             ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
           </div>`;
       }
-
       return `
         <div class="comp-card ${statusFinal}">
           <div class="card-accent"></div>
@@ -524,13 +553,9 @@
         </div>`;
     }
 
-    // ── Card KYC agregado: SEMPRE 1 por processadora ──
-    // UP           → mensagem verde simples
-    // DEGRADED/DOWN → lista os serviços afetados com nome + motivo
     function criarCardKYC(c) {
       const att = fmt(c.atualizado_em);
       let extra = '';
-
       if (c.status === 'UP') {
         extra = `<div class="kyc-ok"><i data-lucide="check-circle"></i>${c.mensagem || 'Todos os serviços operacionais'}</div>`;
       } else if (c.detalhes && c.detalhes.length > 0) {
@@ -554,7 +579,6 @@
       } else {
         extra = `<div class="kyc-warn"><i data-lucide="alert-triangle"></i>${c.mensagem || 'Instabilidade detectada'}</div>`;
       }
-
       return `
         <div class="comp-card ${c.status.toLowerCase()}">
           <div class="card-accent"></div>
@@ -578,30 +602,19 @@
       return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
     }
 
-    // ── Card de Infraestrutura (Cloudflare + AWS) ──
-    // Comportamento idêntico: incidente ativo → amarelo/vermelho + aviso inline + botão de log
     function criarCardInfra(c) {
       const att = fmt(c.atualizado_em);
-
-      // Incidente ativo vinculado a este card
       const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
         ? c.incidentes_ativos[0]
-        : incidentesAtivos.find(i =>
-            i.provedor === 'Cloudflare' && i.status !== 'resolved'
-          );
-
+        : incidentesAtivos.find(i => i.provedor === 'Cloudflare' && i.status !== 'resolved');
       const temIncidente  = !!inc || c.incidente_ativo;
       const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
       const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
       const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
-
-      // Botão de log do incidente
-      const incParaModal = inc || incidentesAtivos.find(i => i.provedor === 'Cloudflare');
+      const incParaModal  = inc || incidentesAtivos.find(i => i.provedor === 'Cloudflare');
       const btn = incParaModal
         ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
         : '';
-
-      // Aviso inline quando há incidente mas componente está UP
       let incidenteInline = '';
       if (inc && c.status === 'UP') {
         const lastUpdate = inc.updates && inc.updates[0];
@@ -611,8 +624,6 @@
             ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
           </div>`;
       }
-
-      // Detalhes de serviços afetados quando status != UP
       let detalhesHtml = '';
       if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
         const itens = c.detalhes.map(d => {
@@ -635,7 +646,6 @@
       } else if (c.status === 'UP' && !temIncidente) {
         detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
       }
-
       return `
         <div class="comp-card ${statusFinal}">
           <div class="card-accent"></div>
@@ -661,8 +671,10 @@
       const { resumo, geral, incidentes = [], incidentes_ativos = [] } = dados;
       incidentesAtivos = incidentes;
 
-      // ── FONTE DE VERDADE: componentes_dashboard ──
       const dashboard = dados.componentes_dashboard || dados.componentes || [];
+
+      // ── Alerta sonoro — chamado logo após ter o dashboard ──
+      verificarAlertaSonoro(dashboard);
 
       // Banner
       const banner = document.getElementById('banner');
@@ -673,7 +685,6 @@
         msg = resumo.down > 0 ? `${resumo.down} sistema${resumo.down>1?'s':''} fora do ar` : 'Interrupção confirmada pela StatusPage';
       } else if (resumo.degraded > 0 || ind === 'minor' || ind === 'maintenance') {
         cls = 'degraded'; ic = 'alert-triangle';
-        // Se há incidente ativo mas componente ainda operational
         if (resumo.degraded === 0 && resumo.down === 0 && incidentes_ativos.length > 0) {
           msg = `${incidentes_ativos.length} incidente${incidentes_ativos.length>1?'s':''} ativo${incidentes_ativos.length>1?'s':''} reportado${incidentes_ativos.length>1?'s':''} pela Okto`;
         } else {
@@ -696,10 +707,6 @@
         <div class="chip chip-total"><i data-lucide="layers"></i>TOTAL: ${dashboard.length}</div>
       `;
 
-      // Separação das seções
-      // APIs & Infra → KYC agregados + Okto sem grupo (Central Bank, Withdraw, Deposit)
-      // Infraestrutura → Cloudflare
-      // Instituições → bancos Okto com grupo
       const apis   = dashboard.filter(c => (c.agregado && c.categoria === 'kyc')
                                         || (c.categoria === 'pagamentos' && !c.grupo));
       const infra  = dashboard.filter(c => c.categoria === 'infraestrutura');
@@ -716,7 +723,6 @@
       lucide.createIcons();
     }
 
-    // Modal de incidente
     function abrirModal(id) {
       const inc = incidentesAtivos.find(i => i.id === id);
       if (!inc) return;
