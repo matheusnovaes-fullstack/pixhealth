@@ -72,7 +72,7 @@ const IGNORADOS_OKTO = ['RTM', 'JD'];
 // CONFIGURAÇÃO DE ALERTAS
 // ─────────────────────────────────────────────
 
-const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
+const SLACK_WEBHOOK  = 'https://hooks.slack.com/services/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';
 const SLACK_MENTIONS = ['U09G386SN01', 'U09BNJL6E2X', 'U09QSBQ7SEP'];
 
 const ALERT_EMAIL_TO   = process.env.ALERT_EMAIL_TO   || null;
