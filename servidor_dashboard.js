@@ -72,8 +72,10 @@ const IGNORADOS_OKTO = ['RTM', 'JD'];
 // CONFIGURAÇÃO DE ALERTAS
 // ─────────────────────────────────────────────
 
-const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK
-const SLACK_MENTIONS = process.env.SLACK_MENTION ? process.env.SLACK_MENTION.split(',') : []
+const SLACK_WEBHOOK   = process.env.SLACK_WEBHOOK
+const SLACK_WEBHOOK_2 = process.env.SLACK_WEBHOOK_2 || null
+const SLACK_MENTIONS  = process.env.SLACK_MENTION ? process.env.SLACK_MENTION.split(',') : []
+
 
 const ALERT_EMAIL_TO   = process.env.ALERT_EMAIL_TO   || null;
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || null;
