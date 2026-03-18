@@ -604,17 +604,24 @@
 
     function criarCardInfra(c) {
       const att = fmt(c.atualizado_em);
+      
+      // ✅ FIX: Busca incidente do provedor correto (Paag ou Cloudflare)
       const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
         ? c.incidentes_ativos[0]
-        : incidentesAtivos.find(i => i.provedor === 'Cloudflare' && i.status !== 'resolved');
+        : incidentesAtivos.find(i => i.provedor === c.provedor && i.status !== 'resolved');
+      
       const temIncidente  = !!inc || c.incidente_ativo;
       const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
       const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
       const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
-      const incParaModal  = inc || incidentesAtivos.find(i => i.provedor === 'Cloudflare');
+      
+      // ✅ FIX: Busca incidente do provedor correto para o modal
+      const incParaModal = inc || incidentesAtivos.find(i => i.provedor === c.provedor);
+      
       const btn = incParaModal
         ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
         : '';
+      
       let incidenteInline = '';
       if (inc && c.status === 'UP') {
         const lastUpdate = inc.updates && inc.updates[0];
@@ -624,6 +631,7 @@
             ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
           </div>`;
       }
+      
       let detalhesHtml = '';
       if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
         const itens = c.detalhes.map(d => {
@@ -646,6 +654,7 @@
       } else if (c.status === 'UP' && !temIncidente) {
         detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
       }
+      
       return `
         <div class="comp-card ${statusFinal}">
           <div class="card-accent"></div>
@@ -656,7 +665,7 @@
             </div>
             <div class="card-divider"></div>
             <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="cloud"></i>${c.provedor}</div>
+              <div class="card-meta-item"><i data-lucide="${c.provedor === 'Paag' ? 'zap' : 'cloud'}"></i>${c.provedor}</div>
               <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
             </div>
             ${detalhesHtml}
