@@ -399,7 +399,7 @@ async function consultarPaag() {
   const status = mapearStatus(componentePIX.status);
   const componente = {
     id:              `Paag-${componentePIX.id}`,
-    nome:            `PIX (Paag)`,
+    nome:            `PIX`,
     provedor:        'Paag',
     categoria:       'pagamentos',
     grupo:           'API & Infraestrutura',
