@@ -39,7 +39,7 @@ const OKTO_CONFIG = {
 const PAAG_CONFIG = {
   nome:       'Paag',
   urlSummary: 'https://statuspage.paag.com.br/api/v2/summary.json',
-  categoria:  'pagamentos',
+  categoria:  'infraestrutura',  // Infraestrutura para aparecer no bloco API & INFRAESTRUTURA
   filtro:     ['PIX'] // Apenas o componente PIX
 };
 
@@ -351,9 +351,9 @@ async function consultarPaag() {
     return {
       componentes: [{
         id:              'Paag-erro',
-        nome:            '⚠️ Erro de Comunicação - Paag PIX',
+        nome:            '⚠️ Erro de Comunicação - PIX',
         provedor:        'Paag',
-        categoria:       'pagamentos',
+        categoria:       'infraestrutura',
         grupo:           'API & Infraestrutura',
         status:          'DEGRADED',
         status_original: 'erro_comunicacao',
@@ -383,7 +383,7 @@ async function consultarPaag() {
         id:              'Paag-pix-nao-encontrado',
         nome:            'PIX',
         provedor:        'Paag',
-        categoria:       'pagamentos',
+        categoria:       'infraestrutura',
         grupo:           'API & Infraestrutura',
         status:          'DEGRADED',
         status_original: 'component_not_found',
@@ -399,9 +399,9 @@ async function consultarPaag() {
   const status = mapearStatus(componentePIX.status);
   const componente = {
     id:              `Paag-${componentePIX.id}`,
-    nome:            `PIX`,
+    nome:            `PIX`,  // Nome do card: apenas "PIX"
     provedor:        'Paag',
-    categoria:       'pagamentos',
+    categoria:       'infraestrutura',  // Categoria infraestrutura para aparecer no bloco certo
     grupo:           'API & Infraestrutura',
     status,
     status_original: componentePIX.status,
@@ -1036,9 +1036,9 @@ async function monitorar() {
   ];
 
   const porCategoria = {
-    pagamentos:     [...componentesOkto, ...componentesPaag],
+    pagamentos:     componentesOkto,
     kyc:            componentesKYC,
-    infraestrutura: componentesCloudflare
+    infraestrutura: [...componentesCloudflare, ...componentesPaag]
   };
 
   const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
