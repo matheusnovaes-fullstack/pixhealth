@@ -22,6 +22,7 @@ const RETRY_DELAY_MS     = 2000;
 // APIs MONITORADAS
 //
 // OKTO       → summary.json  → cards individuais (bancos + Central Bank + Withdraw/Deposit)
+// PAAG       → summary.json  → APENAS o componente 'PIX'
 // KYC        → status.json   → 1 card por processadora
 //              summary.json  → consultado só quando status != operational (detalha serviço afetado)
 // CLOUDFLARE → status.json   → 1 card agregado
@@ -33,6 +34,13 @@ const OKTO_CONFIG = {
   nome:       'Okto Payments',
   urlSummary: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
   categoria:  'pagamentos'
+};
+
+const PAAG_CONFIG = {
+  nome:       'Paag',
+  urlSummary: 'https://statuspage.paag.com.br/api/v2/summary.json',
+  categoria:  'pagamentos',
+  filtro:     ['PIX'] // Apenas o componente PIX
 };
 
 const KYC_CONFIGS = [
@@ -329,6 +337,121 @@ async function consultarOkto() {
 }
 
 // ─────────────────────────────────────────────
+// PAAG — CONSULTA DO COMPONENTE PIX (summary.json)
+// Retorna APENAS 1 card: PIX da Paag
+// ─────────────────────────────────────────────
+
+async function consultarPaag() {
+  console.log(`[Paag] Consultando summary.json (filtro: PIX)...`);
+  const inicio = Date.now();
+  const { data, sucesso, tipoErro } = await httpGet(PAAG_CONFIG.urlSummary);
+
+  if (!sucesso || !data) {
+    console.error(`[Paag] ✗ Falha total: ${tipoErro}`);
+    return {
+      componentes: [{
+        id:              'Paag-erro',
+        nome:            '⚠️ Erro de Comunicação - Paag PIX',
+        provedor:        'Paag',
+        categoria:       'pagamentos',
+        grupo:           'API & Infraestrutura',
+        status:          'DEGRADED',
+        status_original: 'erro_comunicacao',
+        label:           'Erro de Comunicação',
+        descricao:       `Não foi possível conectar (${tipoErro})`,
+        atualizado_em:   new Date().toISOString()
+      }],
+      incidentes:  [],
+      manutencoes: []
+    };
+  }
+
+  const latencia = Date.now() - inicio;
+  console.log(`[Paag] ✓ Resposta em ${latencia}ms`);
+
+  const rawComponents = data.components || [];
+
+  // Procura APENAS o componente PIX
+  const componentePIX = rawComponents
+    .filter(c => c.group === false)
+    .find(c => PAAG_CONFIG.filtro.includes(c.name));
+
+  if (!componentePIX) {
+    console.warn(`[Paag] ⚠️ Componente 'PIX' não encontrado na API`);
+    return {
+      componentes: [{
+        id:              'Paag-pix-nao-encontrado',
+        nome:            'PIX (Paag)',
+        provedor:        'Paag',
+        categoria:       'pagamentos',
+        grupo:           'API & Infraestrutura',
+        status:          'DEGRADED',
+        status_original: 'component_not_found',
+        label:           'Não Encontrado',
+        descricao:       'Componente PIX não está disponível na StatusPage',
+        atualizado_em:   new Date().toISOString()
+      }],
+      incidentes:  [],
+      manutencoes: []
+    };
+  }
+
+  const status = mapearStatus(componentePIX.status);
+  const componente = {
+    id:              `Paag-${componentePIX.id}`,
+    nome:            `PIX (Paag)`,
+    provedor:        'Paag',
+    categoria:       'pagamentos',
+    grupo:           'API & Infraestrutura',
+    status,
+    status_original: componentePIX.status,
+    label:           labelStatus(status),
+    descricao:       componentePIX.description || null,
+    atualizado_em:   componentePIX.updated_at || new Date().toISOString()
+  };
+
+  // Incidentes relacionados ao PIX
+  const incidentes = (data.incidents || [])
+    .filter(i => i.status !== 'resolved')
+    .filter(i => (i.components || []).some(c => c.name === 'PIX'))
+    .map(i => ({
+      id:         `Paag-${i.id}`,
+      provedor:   'Paag',
+      nome:       i.name,
+      status:     i.status,
+      impacto:    i.impact,
+      atualizado: i.updated_at,
+      url:        i.shortlink || null,
+      afetados:   ['PIX'],
+      updates:    (i.incident_updates || []).map(u => ({
+        status:     u.status,
+        body:       u.body,
+        updated_at: u.updated_at
+      }))
+    }));
+
+  const manutencoes = (data.scheduled_maintenances || [])
+    .filter(m => (m.components || []).some(c => c.name === 'PIX'))
+    .map(m => ({
+      id: `Paag-${m.id}`, provedor: 'Paag',
+      nome: m.name, status: m.status,
+      inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
+    }));
+
+  if (incidentes.length > 0) {
+    console.log(`[Paag] ⚠️  ${incidentes.length} incidente(s) ativo(s) no PIX`);
+  }
+
+  console.log(`[Paag] 1 card: PIX (${status})`);
+  return {
+    componentes:      [componente],
+    incidentes,
+    incidentesAtivos: incidentes,
+    manutencoes
+  };
+}
+
+// ─────────────────────────────────────────────
 // KYC — CONSULTA EM 2 ETAPAS
 //
 // Etapa 1: status.json  → indicator geral → UP / DEGRADED / DOWN
@@ -473,10 +596,6 @@ async function consultarKYC(config) {
     console.log(`[${config.nome}] ✓ ${afetados.length} serviço(s) afetado(s):`);
     afetados.forEach(c => console.log(`  ↳ ${c.nome}: ${c.label}`));
 
-    // IMPORTANTE: componente interno sempre usa ID fixo 'X-geral'
-    // Isso garante que o verificarAlertas rastreie corretamente a mudança
-    // de status entre ciclos (UP → DEGRADED → UP) usando sempre o mesmo ID.
-    // Os detalhes individuais ficam no card para exibição, não nos alertas.
     componentesInternos = [{
       id:              `${config.nome}-geral`,
       nome:            config.nome,
@@ -485,12 +604,11 @@ async function consultarKYC(config) {
       status:          statusGeral,
       status_original: indicator,
       label:           labelStatus(statusGeral),
-      descricao:       mensagem,   // ex: "2 serviços com degradação"
+      descricao:       mensagem,
       atualizado_em:   new Date().toISOString()
     }];
 
   } else {
-    // summary.json indisponível — card com status geral sem detalhar serviços
     console.warn(`[${config.nome}] ⚠️  summary.json indisponível — card sem detalhes de serviço`);
     mensagem = description || `Instabilidade detectada (${labelStatus(statusGeral)})`;
     componentesInternos = [{
@@ -527,11 +645,6 @@ async function consultarKYC(config) {
 
 // ─────────────────────────────────────────────
 // CLOUDFLARE — BASEADO 100% EM INCIDENTS[]
-//
-// Ignora componentes individuais (são centenas de países/regiões).
-// Status do card é determinado exclusivamente pelos incidents[]:
-//   • Sem incidente ativo  → card verde
-//   • Incidente ativo      → card amarelo/vermelho com log completo
 // ─────────────────────────────────────────────
 
 async function consultarCloudflare() {
@@ -563,7 +676,6 @@ async function consultarCloudflare() {
     };
   }
 
-  // ── Incidentes ativos (não resolved) ──
   const incidentesAtivos = (data.incidents || [])
     .filter(i => i.status !== 'resolved')
     .map(i => ({
@@ -582,7 +694,6 @@ async function consultarCloudflare() {
       }))
     }));
 
-  // ── Incidentes resolvidos recentes (para histórico/modal) ──
   const incidentesResolvidos = (data.incidents || [])
     .filter(i => i.status === 'resolved')
     .slice(0, 5)
@@ -608,14 +719,12 @@ async function consultarCloudflare() {
     inicio: m.scheduled_for, fim: m.scheduled_until, atualizado: m.updated_at
   }));
 
-  // ── Status do card determinado SOMENTE pelos incidentes ──
   let statusGeral = 'UP';
   let labelGeral  = 'OPERACIONAL';
   let mensagem    = 'Nenhum incidente ativo';
 
   if (incidentesAtivos.length > 0) {
     const inc = incidentesAtivos[0];
-    // Determina severidade pelo campo impact do incidente
     const isCritical = incidentesAtivos.some(i => i.impacto === 'critical' || i.impacto === 'major');
     statusGeral = isCritical ? 'DOWN' : 'DEGRADED';
     labelGeral  = isCritical ? 'DOWN' : 'DEGRADAÇÃO';
@@ -627,7 +736,6 @@ async function consultarCloudflare() {
     console.log(`[Cloudflare] ✓ Nenhum incidente ativo`);
   }
 
-  // Componente interno único (para alertas e histórico)
   const componentesInternos = [{
     id:              'Cloudflare-geral',
     nome:            'Cloudflare',
@@ -650,7 +758,7 @@ async function consultarCloudflare() {
       status:           statusGeral,
       label:            labelGeral,
       mensagem,
-      detalhes:         [],          // Não usamos detalhes de componentes — o log está nos incidents
+      detalhes:         [],
       incidente_ativo:  incidentesAtivos.length > 0,
       incidentes_ativos: incidentesAtivos,
       atualizado_em:    new Date().toISOString(),
@@ -662,7 +770,6 @@ async function consultarCloudflare() {
     manutencoes
   };
 }
-
 
 // ─────────────────────────────────────────────
 // ALERTAS — SLACK
@@ -689,7 +796,6 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
       ? `${emoji.DOWN} ALERTA CRÍTICO — ${componente.provedor}: ${componente.nome} está FORA DO AR`
       : `${emoji.DEGRADED} ALERTA — ${componente.provedor}: ${componente.nome} com DEGRADAÇÃO`;
 
-  // Detalhes adicionais para KYC/Cloudflare (vem da descricao do componente interno)
   const payload = {
     text: mencoes,
     blocks: [
@@ -715,7 +821,6 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
           { type: 'mrkdwn', text: `*🕐 Detectado:*\n${horaAgora} de ${dataAgora}` }
         ]
       },
-      // ── Detalhes do problema (motivo / último update do incidente) ──
       ...(!isRecovery && (componente.descricao || componente.updates?.length) ? [
         { type: 'divider' },
         {
@@ -823,15 +928,6 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
 
 // ─────────────────────────────────────────────
 // VERIFICAR E DISPARAR ALERTAS
-// Sempre sobre componentes individuais internos
-// ─────────────────────────────────────────────
-
-// ─────────────────────────────────────────────
-// VERIFICAR E DISPARAR ALERTAS
-// Cobre TODOS os componentes internos:
-//   • Okto    → cada banco/API individual
-//   • KYC     → componente 'X-geral' (status vem do indicator do status.json)
-//   • Cloudflare → componente 'Cloudflare-geral' (status vem dos incidents[])
 // ─────────────────────────────────────────────
 
 async function verificarAlertas(componentes) {
@@ -847,10 +943,8 @@ async function verificarAlertas(componentes) {
     if (anterior !== c.status) {
       console.log(`[Alerta] MUDANÇA DETECTADA: ${c.provedor}/${c.nome}: ${anterior} → ${c.status}`);
 
-      // Enriquece a descrição para KYC e Cloudflare no alerta
       const componenteEnriquecido = {
         ...c,
-        // Para KYC/Cloudflare o grupo fica como a categoria legível
         grupo: c.grupo || (
           c.categoria === 'kyc'            ? 'Processadoras KYC' :
           c.categoria === 'infraestrutura' ? 'Infraestrutura'    :
@@ -876,39 +970,42 @@ async function monitorar() {
   console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
   console.log('='.repeat(80));
 
-  const [oktoResult, cloudflareResult, ...kycResults] = await Promise.all([
+  const [oktoResult, paagResult, cloudflareResult, ...kycResults] = await Promise.all([
     consultarOkto(),
+    consultarPaag(),
     consultarCloudflare(),
     ...KYC_CONFIGS.map(c => consultarKYC(c))
   ]);
 
   const componentesOkto        = oktoResult.componentes;
+  const componentesPaag        = paagResult.componentes;
   const componentesKYC         = kycResults.flatMap(r => r.componentesInternos);
   const componentesCloudflare  = cloudflareResult.componentesInternos;
-  const todosComponentes       = [...componentesOkto, ...componentesKYC, ...componentesCloudflare];
+  const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare];
 
   const todosIncidentes  = [
     ...(oktoResult.incidentes        || []),
+    ...(paagResult.incidentes        || []),
     ...(cloudflareResult.incidentes  || []),
     ...kycResults.flatMap(r => r.incidentes  || [])
   ];
   const todasManutencoes = [
     ...(oktoResult.manutencoes       || []),
+    ...(paagResult.manutencoes       || []),
     ...(cloudflareResult.manutencoes || []),
     ...kycResults.flatMap(r => r.manutencoes || [])
   ];
 
-  // Incidentes ATIVOS — Okto e Cloudflare
   const incidentesAtivosOkto       = oktoResult.incidentesAtivos       || [];
+  const incidentesAtivosPaag       = paagResult.incidentesAtivos       || [];
   const incidentesAtivosCloudflare = cloudflareResult.incidentesAtivos  || [];
-  const todosIncidentesAtivos      = [...incidentesAtivosOkto, ...incidentesAtivosCloudflare];
+  const todosIncidentesAtivos      = [...incidentesAtivosOkto, ...incidentesAtivosPaag, ...incidentesAtivosCloudflare];
 
-  // Alerta Slack para novos incidentes ativos (Okto + Cloudflare)
   for (const inc of todosIncidentesAtivos) {
     const chave = `incidente-${inc.id}`;
     if (!estadoAnterior[chave]) {
       estadoAnterior[chave] = inc.status;
-      continue; // Primeiro ciclo: registra sem alertar
+      continue;
     }
     if (estadoAnterior[chave] !== inc.status) {
       console.log(`[Incidente] Novo status: "${inc.nome}" (${inc.provedor}) → ${inc.status}`);
@@ -931,18 +1028,15 @@ async function monitorar() {
     }
   }
 
-  // Dashboard:
-  //   • Okto        → cards individuais (bancos + APIs)
-  //   • KYC         → 1 card por processadora
-  //   • Cloudflare  → 1 card agregado
   const componentesDashboard = [
     ...componentesOkto,
+    ...componentesPaag,
     ...kycResults.map(r => r.card),
     cloudflareResult.card
   ];
 
   const porCategoria = {
-    pagamentos:     componentesOkto,
+    pagamentos:     [...componentesOkto, ...componentesPaag],
     kyc:            componentesKYC,
     infraestrutura: componentesCloudflare
   };
@@ -974,12 +1068,12 @@ async function monitorar() {
       incidentes_ativos: todosIncidentesAtivos.length,
       dashboard_cards:   componentesDashboard.length,
       okto_cards:        componentesOkto.length,
+      paag_cards:        componentesPaag.length,
       kyc_cards:         kycResults.length,
       cloudflare_cards:  1
     }
   };
 
-  // Histórico
   historicoDia.push({
     timestamp: new Date().toISOString(),
     hora:      new Date().toLocaleTimeString('pt-BR'),
@@ -1000,13 +1094,11 @@ async function monitorar() {
 
   await verificarAlertas(todosComponentes);
 
-  // Broadcast WebSocket
   const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
   clientesConectados.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(msg);
   });
 
-  // Log em arquivo
   try {
     fs.appendFileSync('monitoramento.log', JSON.stringify({
       timestamp: ultimosResultados.timestamp,
@@ -1015,7 +1107,7 @@ async function monitorar() {
   } catch (e) {}
 
   console.log(`\n[Monitor] RESUMO:`);
-  console.log(`  Cards dashboard   : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${kycResults.length} KYC + 1 Cloudflare)`);
+  console.log(`  Cards dashboard   : ${componentesDashboard.length}  (${componentesOkto.length} Okto + ${componentesPaag.length} Paag + ${kycResults.length} KYC + 1 Cloudflare)`);
   console.log(`  Status geral      : UP=${nUp} | DEGRADED=${nDegraded} | DOWN=${nDown}`);
   if (todosIncidentesAtivos.length > 0) {
     console.log(`  Incidentes ativos : ${todosIncidentesAtivos.length}`);
@@ -1047,6 +1139,7 @@ app.get('/api/health', (req, res) => {
     },
     endpoints: {
       okto:       OKTO_CONFIG.urlSummary,
+      paag:       PAAG_CONFIG.urlSummary,
       serasa:     KYC_CONFIGS[0].urlStatus,
       legitimuz:  KYC_CONFIGS[1].urlStatus,
       unico:      KYC_CONFIGS[2].urlStatus,
@@ -1158,11 +1251,12 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log(`Servidor  : http://0.0.0.0:${PORTA}`);
   console.log(`Intervalo : ${INTERVALO_SEGUNDOS}s | Timeout: ${TIMEOUT_MS / 1000}s | Retries: ${MAX_RETRIES}`);
   console.log(`\nEndpoints configurados:`);
-  console.log(`  • Okto Payments  [CARDS INDIVIDUAIS]  → summary.json`);
+  console.log(`  • Okto Payments  [CARDS INDIVIDUAIS]     → summary.json`);
+  console.log(`  • Paag           [1 CARD: PIX]           → summary.json (filtrado)`);
   KYC_CONFIGS.forEach(k => {
-    console.log(`  • ${k.nome.padEnd(12)} [1 CARD AGREGADO]    → status.json  (+summary.json se degradado/down)`);
+    console.log(`  • ${k.nome.padEnd(12)} [1 CARD AGREGADO]       → status.json  (+summary.json se degradado/down)`);
   });
-  console.log(`  • Cloudflare     [1 CARD AGREGADO]    → status.json  (+summary.json sempre, para incidentes)`);
+  console.log(`  • Cloudflare     [1 CARD AGREGADO]       → status.json  (+summary.json sempre, para incidentes)`);
   console.log(`\nIgnorados Okto : ${IGNORADOS_OKTO.join(' | ')}`);
   console.log(`Slack          : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
   console.log(`Email          : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
