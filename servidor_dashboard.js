@@ -381,7 +381,7 @@ async function consultarPaag() {
     return {
       componentes: [{
         id:              'Paag-pix-nao-encontrado',
-        nome:            'PIX (Paag)',
+        nome:            'PIX',
         provedor:        'Paag',
         categoria:       'pagamentos',
         grupo:           'API & Infraestrutura',
