@@ -503,177 +503,214 @@
       return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
-    function criarCardOkto(c) {
-      const att = fmt(c.atualizado_em);
-      const inc = incidentesAtivos.find(i =>
-        i.provedor === 'Okto Payments' &&
-        i.status !== 'resolved' &&
-        (
-          (i.afetados && i.afetados.some(a => a.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(a.toLowerCase()))) ||
-          i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
-          c.nome.toLowerCase().includes(i.nome.toLowerCase())
-        )
-      );
-      const temIncidente = !!inc || c.incidente_ativo;
-      const statusFinal  = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
-      const labelFinal   = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
-      const icFinal      = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
-      const incParaModal = inc || incidentesAtivos.find(i =>
-        i.provedor === 'Okto Payments' &&
-        (i.nome.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(i.nome.toLowerCase()))
-      );
-      const btn = incParaModal
-        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
-        : '';
-      let incidenteInline = '';
-      if (inc && c.status === 'UP') {
-        const lastUpdate = inc.updates && inc.updates[0];
-        incidenteInline = `
-          <div class="inc-aviso">
-            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
-            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
-          </div>`;
-      }
-      return `
-        <div class="comp-card ${statusFinal}">
-          <div class="card-accent"></div>
-          <div class="card-body">
-            <div class="card-top">
-              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
-              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
-            </div>
-            <div class="card-divider"></div>
-            <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original || c.status.toLowerCase()}</div>
-              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
-            </div>
-            ${incidenteInline}
-            ${btn}
-          </div>
-        </div>`;
-    }
+    // ════════════════════════════════════════════════════════════════
+// FUNÇÕES DE RENDERIZAÇÃO DE CARDS - COM INCIDENTE INLINE
+// ════════════════════════════════════════════════════════════════
 
-    function criarCardKYC(c) {
-      const att = fmt(c.atualizado_em);
-      let extra = '';
-      if (c.status === 'UP') {
-        extra = `<div class="kyc-ok"><i data-lucide="check-circle"></i>${c.mensagem || 'Todos os serviços operacionais'}</div>`;
-      } else if (c.detalhes && c.detalhes.length > 0) {
-        const itens = c.detalhes.map(d => {
-          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
-          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
-          return `
-            <div class="kyc-det-item ${cls}">
-              <div class="kyc-det-row">
-                <span class="kyc-det-nome">${d.nome}</span>
-                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
-              </div>
-              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
-            </div>`;
-        }).join('');
-        extra = `
-          <div class="kyc-detalhes">
-            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
-            ${itens}
-          </div>`;
-      } else {
-        extra = `<div class="kyc-warn"><i data-lucide="alert-triangle"></i>${c.mensagem || 'Instabilidade detectada'}</div>`;
-      }
-      return `
-        <div class="comp-card ${c.status.toLowerCase()}">
-          <div class="card-accent"></div>
-          <div class="card-body">
-            <div class="card-top">
-              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
-              <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
-            </div>
-            <div class="card-divider"></div>
-            <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="shield-check"></i>Processadora KYC</div>
-              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
-            </div>
-            ${extra}
-          </div>
-        </div>`;
-    }
+function criarCardOkto(c) {
+  const att = fmt(c.atualizado_em);
+  
+  // Procura incidente relacionado a este componente
+  const inc = incidentesAtivos.find(i =>
+    i.provedor === 'Okto Payments' &&
+    i.status !== 'resolved' &&
+    (
+      (i.afetados && i.afetados.some(a => a.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(a.toLowerCase()))) ||
+      i.nome.toLowerCase().includes(c.nome.toLowerCase()) ||
+      c.nome.toLowerCase().includes(i.nome.toLowerCase())
+    )
+  );
+  
+  const temIncidente = !!inc || c.incidente_ativo;
+  const statusFinal  = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+  const labelFinal   = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+  const icFinal      = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+  
+  const incParaModal = inc || incidentesAtivos.find(i =>
+    i.provedor === 'Okto Payments' &&
+    (i.nome.toLowerCase().includes(c.nome.toLowerCase()) || c.nome.toLowerCase().includes(i.nome.toLowerCase()))
+  );
+  
+  const btn = incParaModal
+    ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+    : '';
+  
+  // ✨ NOVO: Mostra incidente inline SEMPRE que tiver incidente (não só quando UP)
+  let incidenteInline = '';
+  if (inc) {
+    const lastUpdate = inc.updates && inc.updates[0];
+    incidenteInline = `
+      <div class="inc-aviso">
+        <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+        ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+      </div>`;
+  }
+  
+  return `
+    <div class="comp-card ${statusFinal}">
+      <div class="card-accent"></div>
+      <div class="card-body">
+        <div class="card-top">
+          <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+          <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-meta">
+          <div class="card-meta-item"><i data-lucide="activity"></i>${c.status_original || c.status.toLowerCase()}</div>
+          <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+        </div>
+        ${incidenteInline}
+        ${btn}
+      </div>
+    </div>`;
+}
 
-    function criarCard(c) {
-      if (c.categoria === 'infraestrutura') return criarCardInfra(c);
-      return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
-    }
-
-    function criarCardInfra(c) {
-      const att = fmt(c.atualizado_em);
-      
-      // ✅ FIX: Busca incidente do provedor correto (Paag ou Cloudflare)
-      const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
-        ? c.incidentes_ativos[0]
-        : incidentesAtivos.find(i => i.provedor === c.provedor && i.status !== 'resolved');
-      
-      const temIncidente  = !!inc || c.incidente_ativo;
-      const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
-      const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
-      const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
-      
-      // ✅ FIX: Busca incidente do provedor correto para o modal
-      const incParaModal = inc || incidentesAtivos.find(i => i.provedor === c.provedor);
-      
-      const btn = incParaModal
-        ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
-        : '';
-      
-      let incidenteInline = '';
-      if (inc && c.status === 'UP') {
-        const lastUpdate = inc.updates && inc.updates[0];
-        incidenteInline = `
-          <div class="inc-aviso">
-            <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
-            ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
-          </div>`;
-      }
-      
-      let detalhesHtml = '';
-      if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
-        const itens = c.detalhes.map(d => {
-          const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
-          const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
-          return `
-            <div class="kyc-det-item ${cls}">
-              <div class="kyc-det-row">
-                <span class="kyc-det-nome">${d.nome}</span>
-                <span class="kyc-det-badge ${bdCls}">${d.status}</span>
-              </div>
-              ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
-            </div>`;
-        }).join('');
-        detalhesHtml = `
-          <div class="kyc-detalhes">
-            <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
-            ${itens}
-          </div>`;
-      } else if (c.status === 'UP' && !temIncidente) {
-        detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
-      }
-      
+function criarCardKYC(c) {
+  const att = fmt(c.atualizado_em);
+  
+  // ✨ NOVO: Verifica se tem incidente ativo para este provedor KYC
+  const inc = incidentesAtivos.find(i => 
+    i.provedor === c.provedor && 
+    i.status !== 'resolved'
+  );
+  
+  let extra = '';
+  
+  // ✨ NOVO: Mostra incidente inline se tiver
+  if (inc) {
+    const lastUpdate = inc.updates && inc.updates[0];
+    const incidenteInline = `
+      <div class="inc-aviso">
+        <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+        ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+      </div>`;
+    extra = incidenteInline;
+  } else if (c.status === 'UP') {
+    extra = `<div class="kyc-ok"><i data-lucide="check-circle"></i>${c.mensagem || 'Todos os serviços operacionais'}</div>`;
+  } else if (c.detalhes && c.detalhes.length > 0) {
+    const itens = c.detalhes.map(d => {
+      const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+      const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
       return `
-        <div class="comp-card ${statusFinal}">
-          <div class="card-accent"></div>
-          <div class="card-body">
-            <div class="card-top">
-              <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
-              <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
-            </div>
-            <div class="card-divider"></div>
-            <div class="card-meta">
-              <div class="card-meta-item"><i data-lucide="${c.provedor === 'Paag' ? 'zap' : 'cloud'}"></i>${c.provedor}</div>
-              <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
-            </div>
-            ${detalhesHtml}
-            ${incidenteInline}
-            ${btn}
+        <div class="kyc-det-item ${cls}">
+          <div class="kyc-det-row">
+            <span class="kyc-det-nome">${d.nome}</span>
+            <span class="kyc-det-badge ${bdCls}">${d.status}</span>
           </div>
+          ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
         </div>`;
-    }
+    }).join('');
+    extra = `
+      <div class="kyc-detalhes">
+        <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+        ${itens}
+      </div>`;
+  } else {
+    extra = `<div class="kyc-warn"><i data-lucide="alert-triangle"></i>${c.mensagem || 'Instabilidade detectada'}</div>`;
+  }
+  
+  // ✨ NOVO: Botão de incidente se tiver
+  const btn = inc
+    ? `<button class="btn-incidente" onclick="abrirModal('${inc.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+    : '';
+  
+  return `
+    <div class="comp-card ${c.status.toLowerCase()}">
+      <div class="card-accent"></div>
+      <div class="card-body">
+        <div class="card-top">
+          <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+          <div class="status-badge"><i data-lucide="${icone(c.status)}"></i>${c.label}</div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-meta">
+          <div class="card-meta-item"><i data-lucide="shield-check"></i>Processadora KYC</div>
+          <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+        </div>
+        ${extra}
+        ${btn}
+      </div>
+    </div>`;
+}
+
+function criarCard(c) {
+  if (c.categoria === 'infraestrutura') return criarCardInfra(c);
+  return c.agregado ? criarCardKYC(c) : criarCardOkto(c);
+}
+
+function criarCardInfra(c) {
+  const att = fmt(c.atualizado_em);
+  
+  // ✅ Busca incidente do provedor correto (Paag ou Cloudflare)
+  const inc = (c.incidentes_ativos && c.incidentes_ativos.length > 0)
+    ? c.incidentes_ativos[0]
+    : incidentesAtivos.find(i => i.provedor === c.provedor && i.status !== 'resolved');
+  
+  const temIncidente  = !!inc || c.incidente_ativo;
+  const statusFinal   = temIncidente && c.status === 'UP' ? 'warning' : c.status.toLowerCase();
+  const labelFinal    = temIncidente && c.status === 'UP' ? 'INCIDENTE' : c.label;
+  const icFinal       = temIncidente && c.status === 'UP' ? 'alert-triangle' : icone(c.status);
+  
+  // ✅ Busca incidente do provedor correto para o modal
+  const incParaModal = inc || incidentesAtivos.find(i => i.provedor === c.provedor);
+  
+  const btn = incParaModal
+    ? `<button class="btn-incidente" onclick="abrirModal('${incParaModal.id}')"><i data-lucide="file-text"></i> Log do Incidente</button>`
+    : '';
+  
+  // ✨ NOVO: Mostra incidente inline SEMPRE que tiver (não só quando UP)
+  let incidenteInline = '';
+  if (inc) {
+    const lastUpdate = inc.updates && inc.updates[0];
+    incidenteInline = `
+      <div class="inc-aviso">
+        <div class="inc-aviso-titulo"><i data-lucide="alert-triangle"></i>${inc.nome}</div>
+        ${lastUpdate ? `<div class="inc-aviso-body">${lastUpdate.body}</div>` : ''}
+      </div>`;
+  }
+  
+  let detalhesHtml = '';
+  if (c.status !== 'UP' && c.detalhes && c.detalhes.length > 0) {
+    const itens = c.detalhes.map(d => {
+      const cls   = d.status === 'DOWN' ? 'det-down' : 'det-degraded';
+      const bdCls = d.status === 'DOWN' ? 'down'     : 'degraded';
+      return `
+        <div class="kyc-det-item ${cls}">
+          <div class="kyc-det-row">
+            <span class="kyc-det-nome">${d.nome}</span>
+            <span class="kyc-det-badge ${bdCls}">${d.status}</span>
+          </div>
+          ${d.motivo ? `<div class="kyc-det-motivo">${d.motivo}</div>` : ''}
+        </div>`;
+    }).join('');
+    detalhesHtml = `
+      <div class="kyc-detalhes">
+        <div class="kyc-det-label"><i data-lucide="alert-triangle"></i>Serviços afetados</div>
+        ${itens}
+      </div>`;
+  } else if (c.status === 'UP' && !temIncidente) {
+    detalhesHtml = `<div class="kyc-ok"><i data-lucide="check-circle"></i>Todos os serviços operacionais</div>`;
+  }
+  
+  return `
+    <div class="comp-card ${statusFinal}">
+      <div class="card-accent"></div>
+      <div class="card-body">
+        <div class="card-top">
+          <div class="card-left"><div class="card-dot"></div><span class="card-nome">${c.nome}</span></div>
+          <div class="status-badge"><i data-lucide="${icFinal}"></i>${labelFinal}</div>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-meta">
+          <div class="card-meta-item"><i data-lucide="${c.provedor === 'Paag' ? 'zap' : 'cloud'}"></i>${c.provedor}</div>
+          <div class="card-meta-item"><i data-lucide="clock"></i>${att}</div>
+        </div>
+        ${detalhesHtml}
+        ${incidenteInline}
+        ${btn}
+      </div>
+    </div>`;
+}
 
     function render(dados) {
       document.getElementById('ultimaAtt').textContent = new Date(dados.timestamp).toLocaleTimeString('pt-BR');
