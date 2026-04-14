@@ -7,8 +7,6 @@ const WebSocket = require('ws');
 const http      = require('http');
 const fs        = require('fs');
 
-const { inserirNoDataBricks } = require('./databricks');
-
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
@@ -77,6 +75,77 @@ const CLOUDFLARE_CONFIG = {
 
 // Componentes da Okto a ignorar
 const IGNORADOS_OKTO = ['RTM', 'JD'];
+
+// ─────────────────────────────────────────────
+// DOUBLE CHECK — Mapeamento de bancos em comum entre Okto e Paag
+// Chave: nome normalizado → { okto: nome na Okto, paag: nome na Paag }
+// ─────────────────────────────────────────────
+const BANCO_MAP = [
+  { chave: 'Itaú',            okto: 'Itau',                   paag: 'Itaú'                    },
+  { chave: 'Nubank',          okto: 'Nubank',                 paag: 'Nubank'                  },
+  { chave: 'Santander',       okto: 'Santander',              paag: 'Santander'               },
+  { chave: 'Bradesco',        okto: 'Bradesco',               paag: 'Bradesco'                },
+  { chave: 'C6 Bank',         okto: 'C6 Bank',                paag: 'C6 Bank'                 },
+  { chave: 'Banco do Brasil', okto: 'Banco do Brasil',        paag: 'Banco do Brasil'         },
+  { chave: 'Caixa Econômica', okto: 'Caixa Economica',        paag: 'Caixa Econômica Federal' },
+  { chave: 'PicPay',          okto: 'PicPay',                 paag: 'PicPay'                  },
+  { chave: 'Inter',           okto: 'Inter',                  paag: 'Banco Inter'             },
+];
+
+// ─────────────────────────────────────────────
+// DOUBLE CHECK — Cruza status dos bancos entre Okto e Paag
+// Regra: se qualquer uma das fontes reportar problema → eleva o status
+// ─────────────────────────────────────────────
+function aplicarDoubleCheck(componentesOkto, componentesPaag) {
+  // Monta índice rápido por nome
+  const idxOkto = {};
+  componentesOkto.forEach(c => { idxOkto[c.nome] = c; });
+
+  const idxPaag = {};
+  componentesPaag.forEach(c => { idxPaag[c.nome] = c; });
+
+  const conflitos = [];
+  const prioridade = { DOWN: 3, DEGRADED: 2, UP: 1 };
+
+  for (const banco of BANCO_MAP) {
+    const cOkto = idxOkto[banco.okto];
+    const cPaag = idxPaag[banco.paag];
+
+    if (!cOkto || !cPaag) continue;
+
+    const statusOkto = cOkto.status;
+    const statusPaag = cPaag.status;
+
+    if (statusOkto === statusPaag) continue; // concordam, sem ação
+
+    // Divergência: eleva para o pior status entre as duas fontes
+    const piorStatus = (prioridade[statusOkto] || 1) >= (prioridade[statusPaag] || 1)
+      ? statusOkto : statusPaag;
+    const fontePior  = (prioridade[statusOkto] || 1) >= (prioridade[statusPaag] || 1)
+      ? 'Okto' : 'Paag';
+
+    conflitos.push({ banco: banco.chave, statusOkto, statusPaag, piorStatus, fontePior });
+
+    console.log(`[DoubleCheck] ⚠️  DIVERGÊNCIA em "${banco.chave}": Okto=${statusOkto} | Paag=${statusPaag} → elevando para ${piorStatus} (fonte: ${fontePior})`);
+
+    // Eleva o card da Okto (exibido no dashboard) se Paag detectou algo pior
+    if ((prioridade[piorStatus] || 1) > (prioridade[cOkto.status] || 1)) {
+      cOkto.status         = piorStatus;
+      cOkto.status_display = piorStatus;
+      cOkto.label          = labelStatus(piorStatus);
+      cOkto.double_check   = true;
+      cOkto.double_check_info = `Confirmado via Paag: ${statusPaag} → status elevado para ${piorStatus}`;
+    }
+  }
+
+  if (conflitos.length === 0) {
+    console.log(`[DoubleCheck] ✓ ${BANCO_MAP.length} bancos verificados nas duas fontes — sem divergências`);
+  } else {
+    console.log(`[DoubleCheck] ${conflitos.length} divergência(s) detectada(s) e elevada(s)`);
+  }
+
+  return conflitos;
+}
 
 // ─────────────────────────────────────────────
 // CONFIGURAÇÃO DE ALERTAS
@@ -444,9 +513,28 @@ async function consultarPaag() {
     console.log(`[Paag] ⚠️  ${incidentes.length} incidente(s) ativo(s) no PIX`);
   }
 
-  console.log(`[Paag] 1 card: PIX (${status})`);
+  // ── Bancos da Paag para double check (não aparecem no dashboard) ──
+  // Grupo "Operadores Bancários" (group_id: x58y2bm5mcph)
+  const PAAG_GRUPO_BANCOS = 'x58y2bm5mcph';
+  const bancosDoubleCheck = rawComponents
+    .filter(c => c.group === false && c.group_id === PAAG_GRUPO_BANCOS)
+    .map(c => ({
+      id:              `Paag-banco-${c.id}`,
+      nome:            c.name,
+      provedor:        'Paag',
+      categoria:       'pagamentos',
+      grupo:           'Operadores Bancários',
+      status:          mapearStatus(c.status),
+      status_original: c.status,
+      label:           labelStatus(mapearStatus(c.status)),
+      atualizado_em:   c.updated_at || new Date().toISOString(),
+      _doubleCheckOnly: true // flag: só usado no double check, não vai pro dashboard
+    }));
+
+  console.log(`[Paag] 1 card: PIX (${status}) | ${bancosDoubleCheck.length} bancos carregados para double check`);
   return {
     componentes:      [componente],
+    bancosDoubleCheck,
     incidentes,
     incidentesAtivos: incidentes,
     manutencoes
@@ -820,7 +908,8 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
           { type: 'mrkdwn', text: `*📂 Categoria:*\n${grupoDisplay}` },
           { type: 'mrkdwn', text: `*⚠️ Mudança:*\n${label[statusAnterior] || statusAnterior} → *${label[statusNovo] || statusNovo}*` },
           { type: 'mrkdwn', text: `*📡 Status técnico:*\n\`${componente.status_original || statusNovo.toLowerCase()}\`` },
-          { type: 'mrkdwn', text: `*🕐 Detectado:*\n${horaAgora} de ${dataAgora}` }
+          { type: 'mrkdwn', text: `*🕐 Detectado:*\n${horaAgora} de ${dataAgora}` },
+          ...(componente.double_check ? [{ type: 'mrkdwn', text: `*🔁 Double Check:*\n${componente.double_check_info || 'Confirmado por fonte secundária (Paag)'}` }] : [])
         ]
       },
       ...(!isRecovery && (componente.descricao || componente.updates?.length) ? [
@@ -983,6 +1072,16 @@ async function monitorar() {
   const componentesPaag        = paagResult.componentes;
   const componentesKYC         = kycResults.flatMap(r => r.componentesInternos);
   const componentesCloudflare  = cloudflareResult.componentesInternos;
+
+  // ── Double Check: cruza bancos Okto x Paag e eleva status se divergir ──
+  const bancosDoubleCheck = paagResult.bancosDoubleCheck || [];
+  const conflitosDoubleCheck = aplicarDoubleCheck(componentesOkto, bancosDoubleCheck);
+  if (conflitosDoubleCheck.length > 0) {
+    conflitosDoubleCheck.forEach(c =>
+      console.log(`[DoubleCheck] 🔺 "${c.banco}" elevado para ${c.piorStatus} (Okto: ${c.statusOkto} | Paag: ${c.statusPaag})`)
+    );
+  }
+
   const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare];
 
   const todosIncidentes  = [
@@ -1076,10 +1175,8 @@ async function monitorar() {
     }
   };
 
-  const timestampCiclo = new Date().toISOString();
-
   historicoDia.push({
-    timestamp: timestampCiclo,
+    timestamp: new Date().toISOString(),
     hora:      new Date().toLocaleTimeString('pt-BR'),
     componentes: todosComponentes.map(c => ({
       id: c.id, nome: c.nome, provedor: c.provedor,
@@ -1089,20 +1186,6 @@ async function monitorar() {
   });
 
   if (historicoDia.length > 1440) historicoDia.shift();
-
-  // ── Envia para Databricks (tabela GOLD) ──
-  inserirNoDataBricks(
-    todosComponentes.map(c => ({
-      id:              c.id,
-      nome:            c.nome,
-      provedor:        c.provedor,
-      categoria:       c.categoria,
-      grupo:           c.grupo || null,
-      status:          c.status,
-      status_original: c.status_original
-    })),
-    timestampCiclo
-  ).catch(err => console.error('[Databricks] Erro ao inserir:', err.message));
 
   const agora = new Date();
   if (agora.getHours() === 0 && agora.getMinutes() === 0) {
