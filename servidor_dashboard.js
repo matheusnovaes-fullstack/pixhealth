@@ -7,6 +7,8 @@ const WebSocket = require('ws');
 const http      = require('http');
 const fs        = require('fs');
 
+const { inserirNoDataBricks } = require('./databricks');
+
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
@@ -186,6 +188,29 @@ let historicoDia       = [];
 // ─────────────────────────────────────────────
 
 app.use(express.static('public'));
+app.use(express.json());
+
+// ─────────────────────────────────────────────
+// ESTADO — ERROS REPORTADOS PELA PLATAFORMA
+// ─────────────────────────────────────────────
+// Janela deslizante de 5 minutos por provedor
+// Se atingir threshold → eleva status no dashboard imediatamente
+const ERRO_THRESHOLD     = 3;   // nº de erros para elevar status
+const ERRO_JANELA_MS     = 5 * 60 * 1000; // janela de 5 minutos
+const ERRO_TTL_MS        = 10 * 60 * 1000; // status elevado dura 10 min sem novos erros
+
+const errosPlataforma = {
+  // provedor → { erros: [{timestamp, rota, httpStatus, mensagem}], statusElevado: bool, elevadoEm: Date }
+};
+
+// Provedores aceitos pelo endpoint (mapeados para IDs do dashboard)
+const PROVEDORES_ACEITOS = {
+  'okto':      { label: 'Okto Payments', categoria: 'pagamentos'     },
+  'paag':      { label: 'Paag',          categoria: 'infraestrutura' },
+  'serasa':    { label: 'Serasa',        categoria: 'kyc'            },
+  'legitimuz': { label: 'Legitimuz',     categoria: 'kyc'            },
+  'unico':     { label: 'Unico',         categoria: 'kyc'            },
+};
 
 wss.on('connection', (ws) => {
   console.log('[WebSocket] Cliente conectado');
@@ -1084,6 +1109,7 @@ async function monitorar() {
     );
   }
 
+
   const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare];
 
   const todosIncidentes  = [
@@ -1177,8 +1203,10 @@ async function monitorar() {
     }
   };
 
+  const timestampCiclo = new Date().toISOString();
+
   historicoDia.push({
-    timestamp: new Date().toISOString(),
+    timestamp: timestampCiclo,
     hora:      new Date().toLocaleTimeString('pt-BR'),
     componentes: todosComponentes.map(c => ({
       id: c.id, nome: c.nome, provedor: c.provedor,
@@ -1188,6 +1216,22 @@ async function monitorar() {
   });
 
   if (historicoDia.length > 1440) historicoDia.shift();
+
+  // ── Envia para Databricks (tabela GOLD) ──
+  inserirNoDataBricks(
+    todosComponentes.map(c => ({
+      id:              c.id,
+      nome:            c.nome,
+      provedor:        c.provedor,
+      categoria:       c.categoria,
+      grupo:           c.grupo || null,
+      status:          c.status,
+      status_original: c.status_original,
+      double_check:    c.double_check    || false,
+      double_check_info: c.double_check_info || null
+    })),
+    timestampCiclo
+  ).catch(err => console.error('[Databricks] Erro ao inserir:', err.message));
 
   const agora = new Date();
   if (agora.getHours() === 0 && agora.getMinutes() === 0) {
@@ -1220,11 +1264,154 @@ async function monitorar() {
 }
 
 // ─────────────────────────────────────────────
+// ELEVAÇÃO DE STATUS POR ERROS DA PLATAFORMA
+// ─────────────────────────────────────────────
+
+function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
+  const agora = Date.now();
+
+  if (!errosPlataforma[provedor]) {
+    errosPlataforma[provedor] = { erros: [], statusElevado: false, elevadoEm: null };
+  }
+
+  const estado = errosPlataforma[provedor];
+
+  // Adiciona o erro
+  estado.erros.push({ timestamp: agora, rota, httpStatus, mensagem });
+
+  // Remove erros fora da janela de 5 minutos
+  estado.erros = estado.erros.filter(e => agora - e.timestamp < ERRO_JANELA_MS);
+
+  const qtd = estado.erros.length;
+  const info = PROVEDORES_ACEITOS[provedor];
+
+  console.log(`[ErroPlataforma] ${info.label} — ${qtd} erro(s) nos últimos 5min (threshold: ${ERRO_THRESHOLD}) | rota: ${rota} | HTTP ${httpStatus}`);
+
+  // Atingiu threshold → eleva status no dashboard
+  if (qtd >= ERRO_THRESHOLD && !estado.statusElevado) {
+    estado.statusElevado = true;
+    estado.elevadoEm     = agora;
+
+    console.log(`[ErroPlataforma] 🔺 ELEVANDO status de "${info.label}" para DEGRADED (${qtd} erros em 5min)`);
+
+    // Injeta no ultimosResultados em memória
+    if (ultimosResultados.componentes) {
+      ultimosResultados.componentes = ultimosResultados.componentes.map(c => {
+        if (c.provedor === info.label && c.status === 'UP') {
+          return {
+            ...c,
+            status:           'DEGRADED',
+            status_display:   'DEGRADED',
+            label:            'DEGRADAÇÃO',
+            plataforma_erro:  true,
+            plataforma_info:  `${qtd} erros detectados pela plataforma nos últimos 5min`
+          };
+        }
+        return c;
+      });
+
+      // Atualiza também componentes_dashboard
+      ultimosResultados.componentes_dashboard = ultimosResultados.componentes_dashboard.map(c => {
+        if (c.provedor === info.label && c.status === 'UP') {
+          return { ...c, status: 'DEGRADED', label: 'DEGRADAÇÃO', plataforma_erro: true };
+        }
+        return c;
+      });
+
+      // Recalcula resumo
+      const nUp       = ultimosResultados.componentes.filter(c => c.status === 'UP').length;
+      const nDegraded = ultimosResultados.componentes.filter(c => c.status === 'DEGRADED').length;
+      const nDown     = ultimosResultados.componentes.filter(c => c.status === 'DOWN').length;
+      ultimosResultados.resumo = { ...ultimosResultados.resumo, up: nUp, degraded: nDegraded, down: nDown };
+
+      // Dispara alerta Slack/Email imediatamente
+      const componenteAfetado = ultimosResultados.componentes.find(c => c.provedor === info.label);
+      if (componenteAfetado) {
+        verificarAlertas([{ ...componenteAfetado, status: 'DEGRADED' }]).catch(() => {});
+      }
+
+      // Broadcast WebSocket
+      const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
+      clientesConectados.forEach(c => {
+        if (c.readyState === WebSocket.OPEN) c.send(msg);
+      });
+    }
+  }
+
+  // Auto-recuperação: se não chegarem novos erros por 10min, limpa o estado elevado
+  if (estado.statusElevado) {
+    clearTimeout(estado._recuperacaoTimer);
+    estado._recuperacaoTimer = setTimeout(() => {
+      console.log(`[ErroPlataforma] ✓ "${info.label}" sem novos erros por 10min — aguardando próximo ciclo para recuperar`);
+      estado.statusElevado = false;
+      estado.erros         = [];
+    }, ERRO_TTL_MS);
+  }
+}
+
+// ─────────────────────────────────────────────
 // ROTAS API
 // ─────────────────────────────────────────────
 
 app.get('/api/status', (req, res) => {
   res.json(ultimosResultados);
+});
+
+// ─────────────────────────────────────────────
+// POST /api/erros/reportar
+// Recebe erros da plataforma em tempo real
+//
+// Body esperado:
+// {
+//   "provedor":   "okto" | "paag" | "serasa" | "legitimuz" | "unico",
+//   "rota":       "/pix/transfer",        (opcional)
+//   "httpStatus": 503,                    (opcional)
+//   "mensagem":   "timeout após 30s"      (opcional)
+//   "token":      "seu-token-secreto"     (segurança básica)
+// }
+// ─────────────────────────────────────────────
+app.post('/api/erros/reportar', (req, res) => {
+  const { provedor, rota, httpStatus, mensagem, token } = req.body || {};
+
+  // Validação de token (configura MONITOR_TOKEN no Render)
+  const MONITOR_TOKEN = process.env.MONITOR_TOKEN;
+  if (MONITOR_TOKEN && token !== MONITOR_TOKEN) {
+    return res.status(401).json({ erro: 'Token inválido' });
+  }
+
+  if (!provedor || !PROVEDORES_ACEITOS[provedor.toLowerCase()]) {
+    return res.status(400).json({
+      erro: 'Provedor inválido',
+      provedores_aceitos: Object.keys(PROVEDORES_ACEITOS)
+    });
+  }
+
+  processarErroPlataforma(
+    provedor.toLowerCase(),
+    rota       || 'não informado',
+    httpStatus || 0,
+    mensagem   || 'não informado'
+  );
+
+  res.json({ ok: true, provedor: provedor.toLowerCase(), recebido_em: new Date().toISOString() });
+});
+
+// GET /api/erros — visualiza erros recentes reportados pela plataforma
+app.get('/api/erros', (req, res) => {
+  const agora = Date.now();
+  const resumo = {};
+  for (const [prov, estado] of Object.entries(errosPlataforma)) {
+    const errosRecentes = estado.erros.filter(e => agora - e.timestamp < ERRO_JANELA_MS);
+    resumo[prov] = {
+      erros_5min:     errosRecentes.length,
+      status_elevado: estado.statusElevado,
+      elevado_em:     estado.elevadoEm ? new Date(estado.elevadoEm).toISOString() : null,
+      ultimo_erro:    errosRecentes.length > 0
+        ? new Date(errosRecentes[errosRecentes.length - 1].timestamp).toISOString()
+        : null
+    };
+  }
+  res.json({ threshold: ERRO_THRESHOLD, janela_minutos: 5, provedores: resumo });
 });
 
 app.get('/api/health', (req, res) => {
@@ -1368,4 +1555,5 @@ server.listen(PORTA, '0.0.0.0', () => {
   iniciarKeepAlive();
   monitorar();
   setInterval(monitorar, INTERVALO_SEGUNDOS * 1000);
+
 });
