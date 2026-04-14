@@ -405,12 +405,56 @@ async function consultarOkto() {
     incidentes.flatMap(i => i.afetados)
   );
 
-  const componentesMarcados = componentes.map(c => ({
-    ...c,
-    incidente_ativo: nomesComIncidente.has(c.nome),
-    // Se tem incidente ativo mas componente está UP, mostra como WARNING
-    status_display: nomesComIncidente.has(c.nome) && c.status === 'UP' ? 'WARNING' : c.status
-  }));
+  // Monta índice: nome do banco → incidente ativo que o afeta
+  const incidentePorBanco = {};
+  incidentes.forEach(i => {
+    (i.afetados || []).forEach(nome => {
+      if (!incidentePorBanco[nome]) incidentePorBanco[nome] = i;
+    });
+  });
+
+  // Monta índice: nome do banco → manutenção ativa que o afeta
+  const manutencaoPorBanco = {};
+  (data.scheduled_maintenances || [])
+    .filter(m => m.status !== 'completed')
+    .forEach(m => {
+      (m.components || []).forEach(c => {
+        if (!manutencaoPorBanco[c.name]) {
+          manutencaoPorBanco[c.name] = {
+            nome:   m.name,
+            inicio: m.scheduled_for,
+            fim:    m.scheduled_until,
+            status: m.status
+          };
+        }
+      });
+    });
+
+  const componentesMarcados = componentes.map(c => {
+    const inc  = incidentePorBanco[c.nome];
+    const man  = manutencaoPorBanco[c.nome];
+    const temIncidente = !!inc;
+
+    // Monta motivo: usa o update mais recente do incidente se disponível
+    let motivo = null;
+    if (inc) {
+      const ultimoUpdate = inc.updates?.[0];
+      motivo = ultimoUpdate?.body || inc.nome || null;
+    } else if (man) {
+      motivo = `Manutenção programada: ${man.nome}` +
+               (man.inicio ? ` (${new Date(man.inicio).toLocaleString('pt-BR')} → ${new Date(man.fim).toLocaleString('pt-BR')})` : '');
+    }
+
+    return {
+      ...c,
+      incidente_ativo:  temIncidente,
+      status_display:   temIncidente && c.status === 'UP' ? 'WARNING' : c.status,
+      motivo_incidente: motivo,
+      incidente_nome:   inc?.nome || null,
+      incidente_status: inc?.status || null,
+      incidente_url:    inc?.url || null,
+    };
+  });
 
   const manutencoes = (data.scheduled_maintenances || []).map(m => ({
     id: `Okto Payments-${m.id}`, provedor: 'Okto Payments',
@@ -493,17 +537,40 @@ async function consultarPaag() {
   }
 
   const status = mapearStatus(componentePIX.status);
+
+  // Incidente ativo do PIX (para enriquecer o card)
+  const incidentePIX = (data.incidents || [])
+    .filter(i => i.status !== 'resolved')
+    .find(i => (i.components || []).some(c => c.name === 'PIX'));
+
+  const manutencaoPIX = (data.scheduled_maintenances || [])
+    .filter(m => m.status !== 'completed')
+    .find(m => (m.components || []).some(c => c.name === 'PIX'));
+
+  let motivoPIX = null;
+  if (incidentePIX) {
+    const ultimoUpdate = (incidentePIX.incident_updates || [])[0];
+    motivoPIX = ultimoUpdate?.body || incidentePIX.name || null;
+  } else if (manutencaoPIX) {
+    motivoPIX = `Manutenção programada: ${manutencaoPIX.name}` +
+                (manutencaoPIX.scheduled_for ? ` (${new Date(manutencaoPIX.scheduled_for).toLocaleString('pt-BR')})` : '');
+  }
+
   const componente = {
     id:              `Paag-${componentePIX.id}`,
-    nome:            `PIX`,  // Nome do card: apenas "PIX"
+    nome:            `PIX`,
     provedor:        'Paag',
-    categoria:       'infraestrutura',  // Categoria infraestrutura para aparecer no bloco certo
+    categoria:       'infraestrutura',
     grupo:           'API & Infraestrutura',
     status,
     status_original: componentePIX.status,
     label:           labelStatus(status),
     descricao:       componentePIX.description || null,
-    atualizado_em:   componentePIX.updated_at || new Date().toISOString()
+    atualizado_em:   componentePIX.updated_at || new Date().toISOString(),
+    motivo_incidente: motivoPIX,
+    incidente_nome:   incidentePIX?.name || null,
+    incidente_status: incidentePIX?.status || null,
+    incidente_url:    incidentePIX?.shortlink || null,
   };
 
   // Incidentes relacionados ao PIX
@@ -711,6 +778,12 @@ async function consultarKYC(config) {
     console.log(`[${config.nome}] ✓ ${afetados.length} serviço(s) afetado(s):`);
     afetados.forEach(c => console.log(`  ↳ ${c.nome}: ${c.label}`));
 
+    // Pega motivo do incidente mais recente
+    const incKYC = (summaryData.incidents || []).find(i => i.status !== 'resolved');
+    const motivoKYC = incKYC
+      ? ((incKYC.incident_updates || [])[0]?.body || incKYC.name || mensagem)
+      : mensagem;
+
     componentesInternos = [{
       id:              `${config.nome}-geral`,
       nome:            config.nome,
@@ -720,6 +793,10 @@ async function consultarKYC(config) {
       status_original: indicator,
       label:           labelStatus(statusGeral),
       descricao:       mensagem,
+      motivo_incidente: statusGeral !== 'UP' ? motivoKYC : null,
+      incidente_nome:   incKYC?.name || null,
+      incidente_status: incKYC?.status || null,
+      incidente_url:    incKYC?.shortlink || null,
       atualizado_em:   new Date().toISOString()
     }];
 
@@ -853,6 +930,14 @@ async function consultarCloudflare() {
     console.log(`[Cloudflare] ✓ Nenhum incidente ativo`);
   }
 
+  // Pega último update do incidente mais recente para o motivo
+  let motivoCloudflare = mensagem;
+  if (incidentesAtivos.length > 0) {
+    const inc = incidentesAtivos[0];
+    const ultimoUpdate = inc.updates?.[0];
+    if (ultimoUpdate?.body) motivoCloudflare = ultimoUpdate.body;
+  }
+
   const componentesInternos = [{
     id:              'Cloudflare-geral',
     nome:            'Cloudflare',
@@ -863,6 +948,10 @@ async function consultarCloudflare() {
     status_original: statusGeral.toLowerCase(),
     label:           labelGeral,
     descricao:       mensagem,
+    motivo_incidente: statusGeral !== 'UP' ? motivoCloudflare : null,
+    incidente_nome:   incidentesAtivos[0]?.nome || null,
+    incidente_status: incidentesAtivos[0]?.status || null,
+    incidente_url:    incidentesAtivos[0]?.url || null,
     atualizado_em:   new Date().toISOString()
   }];
 
