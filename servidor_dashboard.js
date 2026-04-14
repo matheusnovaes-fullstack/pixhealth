@@ -7,6 +7,8 @@ const WebSocket = require('ws');
 const http      = require('http');
 const fs        = require('fs');
 
+const { inserirNoDataBricks } = require('./databricks');
+
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
@@ -1074,8 +1076,10 @@ async function monitorar() {
     }
   };
 
+  const timestampCiclo = new Date().toISOString();
+
   historicoDia.push({
-    timestamp: new Date().toISOString(),
+    timestamp: timestampCiclo,
     hora:      new Date().toLocaleTimeString('pt-BR'),
     componentes: todosComponentes.map(c => ({
       id: c.id, nome: c.nome, provedor: c.provedor,
@@ -1085,6 +1089,20 @@ async function monitorar() {
   });
 
   if (historicoDia.length > 1440) historicoDia.shift();
+
+  // ── Envia para Databricks (tabela GOLD) ──
+  inserirNoDataBricks(
+    todosComponentes.map(c => ({
+      id:              c.id,
+      nome:            c.nome,
+      provedor:        c.provedor,
+      categoria:       c.categoria,
+      grupo:           c.grupo || null,
+      status:          c.status,
+      status_original: c.status_original
+    })),
+    timestampCiclo
+  ).catch(err => console.error('[Databricks] Erro ao inserir:', err.message));
 
   const agora = new Date();
   if (agora.getHours() === 0 && agora.getMinutes() === 0) {
