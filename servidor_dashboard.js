@@ -815,7 +815,9 @@ async function consultarCloudflare() {
 
   if (incidentesAtivos.length > 0) {
     const inc = incidentesAtivos[0];
-    const isCritical = incidentesAtivos.some(i => i.impacto === 'critical' || i.impacto === 'major');
+    // DOWN apenas quando impacto for realmente crítico (critical)
+    // major, minor, maintenance → DEGRADED (incidente significativo mas sem queda total)
+    const isCritical = incidentesAtivos.some(i => i.impacto === 'critical');
     statusGeral = isCritical ? 'DOWN' : 'DEGRADED';
     labelGeral  = isCritical ? 'DOWN' : 'DEGRADAÇÃO';
     mensagem    = inc.nome;
