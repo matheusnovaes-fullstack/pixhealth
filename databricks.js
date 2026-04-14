@@ -118,22 +118,25 @@ async function inserirNoDataBricks(componentes, timestampColeta) {
         'APIs & Infraestrutura'
       );
       return `(${[
-        esc(dataInsercao),   // data_insercao
-        esc(tsColeta),       // timestamp_coleta
-        esc(c.provedor),     // provedor
-        esc(c.categoria),    // categoria
-        esc(grupo),          // grupo
-        esc(c.id),           // componente_id
-        esc(c.nome),         // componente_nome
-        esc(c.status),       // status
-        esc(c.status_original) // status_original
+        esc(dataInsercao),        // data_insercao
+        esc(tsColeta),            // timestamp_coleta
+        esc(c.provedor),          // provedor
+        esc(c.categoria),         // categoria
+        esc(grupo),               // grupo
+        esc(c.id),                // componente_id
+        esc(c.nome),              // componente_nome
+        esc(c.status),            // status
+        esc(c.status_original),   // status_original
+        c.double_check ? 'true' : 'false',  // double_check
+        esc(c.double_check_info || null)    // double_check_info
       ].join(', ')})`;
     }).join(',\n  ');
 
     const sql = `
 INSERT INTO ${TABLE_FQN}
   (data_insercao, timestamp_coleta, provedor, categoria, grupo,
-   componente_id, componente_nome, status, status_original)
+   componente_id, componente_nome, status, status_original,
+   double_check, double_check_info)
 VALUES
   ${values}
 `;
