@@ -71,6 +71,13 @@ const CLOUDFLARE_CONFIG = {
   categoria:  'infraestrutura'
 };
 
+// Bacen — SPI (Sistema de Pagamentos Instantâneos)
+const BACEN_CONFIG = {
+  nome:        'Banco Central',
+  urlInterrup: 'https://olinda.bcb.gov.br/olinda/servico/SPI/versao/v1/odata/PixInterrupcaoSPI?$format=json',
+  categoria:   'infraestrutura'
+};
+
 // Componentes da Okto a ignorar
 const IGNORADOS_OKTO = ['RTM', 'JD'];
 
@@ -810,6 +817,100 @@ async function consultarKYC(config) {
 }
 
 // ─────────────────────────────────────────────
+// BACEN — SPI (Sistema de Pagamentos Instantâneos)
+// Fonte oficial do Banco Central sobre interrupções do PIX
+// ─────────────────────────────────────────────
+
+async function consultarBacen() {
+  console.log(`[Bacen] Consultando PixInterrupcaoSPI...`);
+  const inicio = Date.now();
+  const { data, sucesso, tipoErro } = await httpGet(BACEN_CONFIG.urlInterrup);
+
+  if (!sucesso || !data) {
+    console.error(`[Bacen] ✗ Falha: ${tipoErro}`);
+    return {
+      card: {
+        id:              'agregado-Bacen',
+        nome:            'Banco Central (SPI)',
+        provedor:        'Banco Central',
+        categoria:       'infraestrutura',
+        status:          'DEGRADED',
+        label:           'DEGRADAÇÃO',
+        mensagem:        `Não foi possível verificar o status (${tipoErro})`,
+        detalhes:        [],
+        atualizado_em:   new Date().toISOString(),
+        agregado:        true
+      },
+      componentesInternos: [],
+      incidentes:  [],
+      manutencoes: []
+    };
+  }
+
+  const latencia = Date.now() - inicio;
+  console.log(`[Bacen] ✓ Resposta em ${latencia}ms`);
+
+  const interrupcoes = (data.value || []);
+
+  // Filtra interrupções reais — ignora o registro "TOTAL" que é só sumário
+  const interrupcaoAtiva = interrupcoes.find(i =>
+    i.DataHoraInicioInt &&
+    i.DataHoraInicioInt !== 'TOTAL' &&
+    i.DataHoraInicioInt !== '-' &&
+    (!i.DataHoraTerminoInt || i.DataHoraTerminoInt === '-')
+  );
+
+  let statusGeral = 'UP';
+  let mensagem    = 'SPI operacional — nenhuma interrupção ativa';
+  let motivoIncidente = null;
+
+  if (interrupcaoAtiva) {
+    statusGeral     = 'DOWN';
+    mensagem        = `Interrupção do SPI desde ${interrupcaoAtiva.DataHoraInicioInt}`;
+    motivoIncidente = interrupcaoAtiva.Interrupcao && interrupcaoAtiva.Interrupcao !== '-'
+      ? interrupcaoAtiva.Interrupcao
+      : `Interrupção oficial do SPI reportada pelo Banco Central desde ${interrupcaoAtiva.DataHoraInicioInt}`;
+    console.log(`[Bacen] ⚠️  INTERRUPÇÃO ATIVA do SPI: ${interrupcaoAtiva.DataHoraInicioInt}`);
+  } else {
+    console.log(`[Bacen] ✓ SPI operacional — nenhuma interrupção ativa`);
+  }
+
+  const componentesInternos = [{
+    id:              'Bacen-spi',
+    nome:            'Banco Central (SPI)',
+    provedor:        'Banco Central',
+    categoria:       'infraestrutura',
+    grupo:           null,
+    status:          statusGeral,
+    status_original: statusGeral.toLowerCase(),
+    label:           labelStatus(statusGeral),
+    descricao:       mensagem,
+    motivo_incidente: motivoIncidente,
+    incidente_nome:   interrupcaoAtiva ? 'Interrupção SPI — Banco Central' : null,
+    incidente_url:    'https://www.bcb.gov.br/estabilidadefinanceira/pix',
+    atualizado_em:    new Date().toISOString()
+  }];
+
+  return {
+    card: {
+      id:              'agregado-Bacen',
+      nome:            'Banco Central (SPI)',
+      provedor:        'Banco Central',
+      categoria:       'infraestrutura',
+      status:          statusGeral,
+      label:           labelStatus(statusGeral),
+      mensagem,
+      detalhes:        [],
+      atualizado_em:   new Date().toISOString(),
+      agregado:        true
+    },
+    componentesInternos,
+    incidentes:  [],
+    manutencoes: []
+  };
+}
+
+// ─────────────────────────────────────────────
 // CLOUDFLARE — BASEADO 100% EM INCIDENTS[]
 // ─────────────────────────────────────────────
 
@@ -1151,10 +1252,11 @@ async function monitorar() {
   console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
   console.log('='.repeat(80));
 
-  const [oktoResult, paagResult, cloudflareResult, ...kycResults] = await Promise.all([
+  const [oktoResult, paagResult, cloudflareResult, bacenResult, ...kycResults] = await Promise.all([
     consultarOkto(),
     consultarPaag(),
     consultarCloudflare(),
+    consultarBacen(),
     ...KYC_CONFIGS.map(c => consultarKYC(c))
   ]);
 
@@ -1162,6 +1264,7 @@ async function monitorar() {
   const componentesPaag        = paagResult.componentes;
   const componentesKYC         = kycResults.flatMap(r => r.componentesInternos);
   const componentesCloudflare  = cloudflareResult.componentesInternos;
+  const componentesBacen       = bacenResult.componentesInternos;
 
   // ── Double Check: cruza bancos Okto x Paag e eleva status se divergir ──
   const bancosDoubleCheck = paagResult.bancosDoubleCheck || [];
@@ -1173,7 +1276,7 @@ async function monitorar() {
   }
 
 
-  const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare];
+  const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare, ...componentesBacen];
 
   const todosIncidentes  = [
     ...(oktoResult.incidentes        || []),
@@ -1224,13 +1327,14 @@ async function monitorar() {
     ...componentesOkto,
     ...componentesPaag,
     ...kycResults.map(r => r.card),
-    cloudflareResult.card
+    cloudflareResult.card,
+    bacenResult.card
   ];
 
   const porCategoria = {
     pagamentos:     componentesOkto,
     kyc:            componentesKYC,
-    infraestrutura: [...componentesCloudflare, ...componentesPaag]
+    infraestrutura: [...componentesCloudflare, ...componentesPaag, ...componentesBacen]
   };
 
   const nUp       = todosComponentes.filter(c => c.status === 'UP').length;
@@ -1262,7 +1366,8 @@ async function monitorar() {
       okto_cards:        componentesOkto.length,
       paag_cards:        componentesPaag.length,
       kyc_cards:         kycResults.length,
-      cloudflare_cards:  1
+      cloudflare_cards:  1,
+      bacen_cards:       1
     }
   };
 
@@ -1488,7 +1593,8 @@ app.get('/api/health', (req, res) => {
       serasa:     KYC_CONFIGS[0].urlStatus,
       legitimuz:  KYC_CONFIGS[1].urlStatus,
       unico:      KYC_CONFIGS[2].urlStatus,
-      cloudflare: CLOUDFLARE_CONFIG.urlStatus
+      cloudflare: CLOUDFLARE_CONFIG.urlStatus,
+      bacen:      BACEN_CONFIG.urlInterrup
     }
   });
 });
@@ -1602,6 +1708,7 @@ app.listen(PORTA, '0.0.0.0', () => {
     console.log(`  • ${k.nome.padEnd(12)} [1 CARD AGREGADO]       → status.json  (+summary.json se degradado/down)`);
   });
   console.log(`  • Cloudflare     [1 CARD AGREGADO]       → status.json  (+summary.json sempre, para incidentes)`);
+  console.log(`  • Banco Central  [1 CARD AGREGADO]       → PixInterrupcaoSPI (API oficial Bacen)`);
   console.log(`\nIgnorados Okto : ${IGNORADOS_OKTO.join(' | ')}`);
   console.log(`Slack          : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
   console.log(`Email          : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
