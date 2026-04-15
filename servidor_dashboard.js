@@ -3,15 +3,11 @@ process.env.TZ = 'America/Sao_Paulo';
 
 const express   = require('express');
 const axios     = require('axios');
-const WebSocket = require('ws');
-const http      = require('http');
 const fs        = require('fs');
 
 const { inserirNoDataBricks } = require('./databricks');
 
 const app    = express();
-const server = http.createServer(app);
-const wss    = new WebSocket.Server({ server });
 
 const PORTA              = process.env.PORT || 3000;
 const INTERVALO_SEGUNDOS = process.env.INTERVALO_MONITORAMENTO || 60;
@@ -180,7 +176,6 @@ let ultimosResultados = {
   por_categoria:         { pagamentos: [], kyc: [] }
 };
 
-let clientesConectados = [];
 let historicoDia       = [];
 
 // ─────────────────────────────────────────────
@@ -211,27 +206,6 @@ const PROVEDORES_ACEITOS = {
   'legitimuz': { label: 'Legitimuz',     categoria: 'kyc'            },
   'unico':     { label: 'Unico',         categoria: 'kyc'            },
 };
-
-wss.on('connection', (ws) => {
-  console.log('[WebSocket] Cliente conectado');
-  clientesConectados.push(ws);
-
-  const pingInterval = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) ws.ping();
-  }, 30000);
-
-  if (ultimosResultados.timestamp) {
-    ws.send(JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados }));
-  }
-
-  ws.on('pong', () => {});
-  ws.on('close', () => {
-    clearInterval(pingInterval);
-    clientesConectados = clientesConectados.filter(c => c !== ws);
-    console.log('[WebSocket] Cliente desconectado');
-  });
-  ws.on('error', (err) => console.error('[WebSocket] Erro:', err.message));
-});
 
 // ─────────────────────────────────────────────
 // MAPEAMENTO DE STATUS
@@ -1330,11 +1304,6 @@ async function monitorar() {
 
   await verificarAlertas(todosComponentes);
 
-  const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
-  clientesConectados.forEach(c => {
-    if (c.readyState === WebSocket.OPEN) c.send(msg);
-  });
-
   try {
     fs.appendFileSync('monitoramento.log', JSON.stringify({
       timestamp: ultimosResultados.timestamp,
@@ -1419,11 +1388,7 @@ function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
         verificarAlertas([{ ...componenteAfetado, status: 'DEGRADED' }]).catch(() => {});
       }
 
-      // Broadcast WebSocket
-      const msg = JSON.stringify({ tipo: 'atualizacao', dados: ultimosResultados });
-      clientesConectados.forEach(c => {
-        if (c.readyState === WebSocket.OPEN) c.send(msg);
-      });
+      // Estado elevado — Lovable atualiza via polling a cada 60s
     }
   }
 
@@ -1443,6 +1408,8 @@ function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
 // ─────────────────────────────────────────────
 
 app.get('/api/status', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.json(ultimosResultados);
 });
 
@@ -1508,7 +1475,6 @@ app.get('/api/health', (req, res) => {
     status:             'alive',
     timestamp:          new Date().toISOString(),
     uptime_segundos:    Math.floor(process.uptime()),
-    clientes_ws:        clientesConectados.length,
     historico_size:     historicoDia.length,
     ultima_verificacao: ultimosResultados.timestamp || null,
     config: {
@@ -1623,7 +1589,7 @@ function iniciarKeepAlive() {
 // START
 // ─────────────────────────────────────────────
 
-server.listen(PORTA, '0.0.0.0', () => {
+app.listen(PORTA, '0.0.0.0', () => {
   console.log('\n' + '='.repeat(65));
   console.log('Pix Health Monitor — Multi-Provider');
   console.log('='.repeat(65));
