@@ -16,18 +16,6 @@ const TIMEOUT_MS         = 30000;
 const MAX_RETRIES        = 3;
 const RETRY_DELAY_MS     = 2000;
 
-// ─────────────────────────────────────────────
-// APIs MONITORADAS
-//
-// OKTO       → summary.json  → cards individuais (bancos + Central Bank + Withdraw/Deposit)
-// PAAG       → summary.json  → APENAS o componente 'PIX'
-// KYC        → status.json   → 1 card por processadora
-//              summary.json  → consultado só quando status != operational (detalha serviço afetado)
-// CLOUDFLARE → status.json   → 1 card agregado
-//              summary.json  → consultado só quando status != operational
-//              incidents[]   → log completo igual ao da Okto (mesmo com componentes operacionais)
-// ─────────────────────────────────────────────
-
 const OKTO_CONFIG = {
   nome:       'Okto Payments',
   urlSummary: 'https://oktopaymentsbrazil.statuspage.io/api/v2/summary.json',
@@ -37,8 +25,8 @@ const OKTO_CONFIG = {
 const PAAG_CONFIG = {
   nome:       'Paag',
   urlSummary: 'https://statuspage.paag.com.br/api/v2/summary.json',
-  categoria:  'infraestrutura',  // Infraestrutura para aparecer no bloco API & INFRAESTRUTURA
-  filtro:     ['PIX'] // Apenas o componente PIX
+  categoria:  'infraestrutura',
+  filtro:     ['PIX']
 };
 
 const KYC_CONFIGS = [
@@ -62,8 +50,6 @@ const KYC_CONFIGS = [
   }
 ];
 
-// Cloudflare — infraestrutura crítica
-// Mesma lógica de 2 etapas das KYC + detecção de incidentes ativos como a Okto
 const CLOUDFLARE_CONFIG = {
   nome:       'Cloudflare',
   urlStatus:  'https://www.cloudflarestatus.com/api/v2/status.json',
@@ -71,20 +57,14 @@ const CLOUDFLARE_CONFIG = {
   categoria:  'infraestrutura'
 };
 
-// Bacen — SPI (Sistema de Pagamentos Instantâneos)
 const BACEN_CONFIG = {
   nome:        'Banco Central',
   urlInterrup: 'https://olinda.bcb.gov.br/olinda/servico/SPI/versao/v1/odata/PixInterrupcaoSPI?$format=json',
   categoria:   'infraestrutura'
 };
 
-// Componentes da Okto a ignorar
 const IGNORADOS_OKTO = ['RTM', 'JD'];
 
-// ─────────────────────────────────────────────
-// DOUBLE CHECK — Mapeamento de bancos em comum entre Okto e Paag
-// Chave: nome normalizado → { okto: nome na Okto, paag: nome na Paag }
-// ─────────────────────────────────────────────
 const BANCO_MAP = [
   { chave: 'Itaú',            okto: 'Itau',                   paag: 'Itaú'                    },
   { chave: 'Nubank',          okto: 'Nubank',                 paag: 'Nubank'                  },
@@ -97,12 +77,7 @@ const BANCO_MAP = [
   { chave: 'Inter',           okto: 'Inter',                  paag: 'Banco Inter'             },
 ];
 
-// ─────────────────────────────────────────────
-// DOUBLE CHECK — Cruza status dos bancos entre Okto e Paag
-// Regra: se qualquer uma das fontes reportar problema → eleva o status
-// ─────────────────────────────────────────────
 function aplicarDoubleCheck(componentesOkto, componentesPaag) {
-  // Monta índice rápido por nome
   const idxOkto = {};
   componentesOkto.forEach(c => { idxOkto[c.nome] = c; });
 
@@ -121,9 +96,8 @@ function aplicarDoubleCheck(componentesOkto, componentesPaag) {
     const statusOkto = cOkto.status;
     const statusPaag = cPaag.status;
 
-    if (statusOkto === statusPaag) continue; // concordam, sem ação
+    if (statusOkto === statusPaag) continue;
 
-    // Divergência: eleva para o pior status entre as duas fontes
     const piorStatus = (prioridade[statusOkto] || 1) >= (prioridade[statusPaag] || 1)
       ? statusOkto : statusPaag;
     const fontePior  = (prioridade[statusOkto] || 1) >= (prioridade[statusPaag] || 1)
@@ -133,7 +107,6 @@ function aplicarDoubleCheck(componentesOkto, componentesPaag) {
 
     console.log(`[DoubleCheck] ⚠️  DIVERGÊNCIA em "${banco.chave}": Okto=${statusOkto} | Paag=${statusPaag} → elevando para ${piorStatus} (fonte: ${fontePior})`);
 
-    // Eleva o card da Okto (exibido no dashboard) se Paag detectou algo pior
     if ((prioridade[piorStatus] || 1) > (prioridade[cOkto.status] || 1)) {
       cOkto.status         = piorStatus;
       cOkto.status_display = piorStatus;
@@ -152,13 +125,8 @@ function aplicarDoubleCheck(componentesOkto, componentesPaag) {
   return conflitos;
 }
 
-// ─────────────────────────────────────────────
-// CONFIGURAÇÃO DE ALERTAS
-// ─────────────────────────────────────────────
-
-const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK
-const SLACK_MENTIONS = process.env.SLACK_MENTION ? process.env.SLACK_MENTION.split(',') : []
-
+const SLACK_WEBHOOK  = process.env.SLACK_WEBHOOK;
+const SLACK_MENTIONS = process.env.SLACK_MENTION ? process.env.SLACK_MENTION.split(',') : [];
 
 const ALERT_EMAIL_TO   = process.env.ALERT_EMAIL_TO   || null;
 const ALERT_EMAIL_FROM = process.env.ALERT_EMAIL_FROM || null;
@@ -169,43 +137,27 @@ const SMTP_PASS        = process.env.SMTP_PASS        || null;
 
 const estadoAnterior = {};
 
-// ─────────────────────────────────────────────
-// ESTADO GLOBAL
-// ─────────────────────────────────────────────
-
 let ultimosResultados = {
   timestamp:             null,
-  componentes:           [],   // Internos: todos individuais (alertas + histórico)
-  componentes_dashboard: [],   // O que o frontend renderiza
+  componentes:           [],
+  componentes_dashboard: [],
   incidentes:            [],
   manutencoes:           [],
   resumo:                {},
   por_categoria:         { pagamentos: [], kyc: [] }
 };
 
-let historicoDia       = [];
-
-// ─────────────────────────────────────────────
-// STATIC + WEBSOCKET
-// ─────────────────────────────────────────────
+let historicoDia = [];
 
 app.use(express.static('public'));
 app.use(express.json());
 
-// ─────────────────────────────────────────────
-// ESTADO — ERROS REPORTADOS PELA PLATAFORMA
-// ─────────────────────────────────────────────
-// Janela deslizante de 5 minutos por provedor
-// Se atingir threshold → eleva status no dashboard imediatamente
-const ERRO_THRESHOLD     = 3;   // nº de erros para elevar status
-const ERRO_JANELA_MS     = 5 * 60 * 1000; // janela de 5 minutos
-const ERRO_TTL_MS        = 10 * 60 * 1000; // status elevado dura 10 min sem novos erros
+const ERRO_THRESHOLD = 3;
+const ERRO_JANELA_MS = 5 * 60 * 1000;
+const ERRO_TTL_MS    = 10 * 60 * 1000;
 
-const errosPlataforma = {
-  // provedor → { erros: [{timestamp, rota, httpStatus, mensagem}], statusElevado: bool, elevadoEm: Date }
-};
+const errosPlataforma = {};
 
-// Provedores aceitos pelo endpoint (mapeados para IDs do dashboard)
 const PROVEDORES_ACEITOS = {
   'okto':      { label: 'Okto Payments', categoria: 'pagamentos'     },
   'paag':      { label: 'Paag',          categoria: 'infraestrutura' },
@@ -214,11 +166,6 @@ const PROVEDORES_ACEITOS = {
   'unico':     { label: 'Unico',         categoria: 'kyc'            },
 };
 
-// ─────────────────────────────────────────────
-// MAPEAMENTO DE STATUS
-// ─────────────────────────────────────────────
-
-// Mapeia status do statuspage.io (components[].status) para UP / DEGRADED / DOWN
 function mapearStatus(statusOriginal) {
   switch (statusOriginal) {
     case 'operational':           return 'UP';
@@ -230,7 +177,6 @@ function mapearStatus(statusOriginal) {
   }
 }
 
-// Mapeia o campo "indicator" do status.json para UP / DEGRADED / DOWN
 function mapearIndicator(indicator) {
   switch (indicator) {
     case 'none':                  return 'UP';
@@ -251,10 +197,6 @@ function labelStatus(status) {
   }
 }
 
-// ─────────────────────────────────────────────
-// HTTP COM RETRY
-// ─────────────────────────────────────────────
-
 async function httpGet(url, tentativa = 1) {
   try {
     const res = await axios.get(url, {
@@ -274,11 +216,6 @@ async function httpGet(url, tentativa = 1) {
     return { data: null, sucesso: false, tipoErro };
   }
 }
-
-// ─────────────────────────────────────────────
-// OKTO — CONSULTA COMPLETA (summary.json)
-// Retorna cards individuais: bancos + Central Bank + Withdraw/Deposit
-// ─────────────────────────────────────────────
 
 async function consultarOkto() {
   console.log(`[Okto] Consultando summary.json...`);
@@ -309,12 +246,9 @@ async function consultarOkto() {
   console.log(`[Okto] ✓ Resposta em ${latencia}ms`);
 
   const rawComponents = data.components || [];
-
-  // Monta mapa de grupos
   const grupos = {};
   rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
 
-  // Filtra apenas folhas (não são grupos) e remove os ignorados
   const componentes = rawComponents
     .filter(c => c.group === false && !IGNORADOS_OKTO.includes(c.name))
     .map(c => {
@@ -337,12 +271,9 @@ async function consultarOkto() {
       return (ord[a.status] ?? 2) - (ord[b.status] ?? 2);
     });
 
-  // Incidentes ativos (qualquer status exceto resolved)
-  // Inclui updates[] completo e lista de componentes afetados
   const incidentes = (data.incidents || [])
     .filter(i => i.status !== 'resolved')
     .map(i => {
-      // Nomes dos componentes afetados por este incidente
       const afetados = (i.components || []).map(c => c.name);
       return {
         id:         `Okto Payments-${i.id}`,
@@ -352,7 +283,7 @@ async function consultarOkto() {
         impacto:    i.impact,
         atualizado: i.updated_at,
         url:        i.shortlink || null,
-        afetados,   // nomes dos bancos/componentes afetados
+        afetados,
         updates:    (i.incident_updates || []).map(u => ({
           status:     u.status,
           body:       u.body,
@@ -361,7 +292,6 @@ async function consultarOkto() {
       };
     });
 
-  // Incidentes resolvidos recentes (últimas 24h) — para histórico/modal
   const incidentesResolvidos = (data.incidents || [])
     .filter(i => i.status === 'resolved')
     .slice(0, 5)
@@ -381,12 +311,6 @@ async function consultarOkto() {
       }))
     }));
 
-  // Marca componentes que têm incidente ativo (mesmo estando operational)
-  const nomesComIncidente = new Set(
-    incidentes.flatMap(i => i.afetados)
-  );
-
-  // Monta índice: nome do banco → incidente ativo que o afeta
   const incidentePorBanco = {};
   incidentes.forEach(i => {
     (i.afetados || []).forEach(nome => {
@@ -394,7 +318,6 @@ async function consultarOkto() {
     });
   });
 
-  // Monta índice: nome do banco → manutenção ativa que o afeta
   const manutencaoPorBanco = {};
   (data.scheduled_maintenances || [])
     .filter(m => m.status !== 'completed')
@@ -416,7 +339,6 @@ async function consultarOkto() {
     const man  = manutencaoPorBanco[c.nome];
     const temIncidente = !!inc;
 
-    // Monta motivo: usa o update mais recente do incidente se disponível
     let motivo = null;
     if (inc) {
       const ultimoUpdate = inc.updates?.[0];
@@ -457,11 +379,6 @@ async function consultarOkto() {
   };
 }
 
-// ─────────────────────────────────────────────
-// PAAG — CONSULTA DO COMPONENTE PIX (summary.json)
-// Retorna APENAS 1 card: PIX da Paag
-// ─────────────────────────────────────────────
-
 async function consultarPaag() {
   console.log(`[Paag] Consultando summary.json (filtro: PIX)...`);
   const inicio = Date.now();
@@ -492,7 +409,6 @@ async function consultarPaag() {
 
   const rawComponents = data.components || [];
 
-  // Procura APENAS o componente PIX
   const componentePIX = rawComponents
     .filter(c => c.group === false)
     .find(c => PAAG_CONFIG.filtro.includes(c.name));
@@ -519,7 +435,6 @@ async function consultarPaag() {
 
   const status = mapearStatus(componentePIX.status);
 
-  // Incidente ativo do PIX (para enriquecer o card)
   const incidentePIX = (data.incidents || [])
     .filter(i => i.status !== 'resolved')
     .find(i => (i.components || []).some(c => c.name === 'PIX'));
@@ -554,7 +469,6 @@ async function consultarPaag() {
     incidente_url:    incidentePIX?.shortlink || null,
   };
 
-  // Incidentes relacionados ao PIX
   const incidentes = (data.incidents || [])
     .filter(i => i.status !== 'resolved')
     .filter(i => (i.components || []).some(c => c.name === 'PIX'))
@@ -586,8 +500,6 @@ async function consultarPaag() {
     console.log(`[Paag] ⚠️  ${incidentes.length} incidente(s) ativo(s) no PIX`);
   }
 
-  // ── Bancos da Paag para double check (não aparecem no dashboard) ──
-  // Grupo "Operadores Bancários" (group_id: x58y2bm5mcph)
   const PAAG_GRUPO_BANCOS = 'x58y2bm5mcph';
   const bancosDoubleCheck = rawComponents
     .filter(c => c.group === false && c.group_id === PAAG_GRUPO_BANCOS)
@@ -601,7 +513,7 @@ async function consultarPaag() {
       status_original: c.status,
       label:           labelStatus(mapearStatus(c.status)),
       atualizado_em:   c.updated_at || new Date().toISOString(),
-      _doubleCheckOnly: true // flag: só usado no double check, não vai pro dashboard
+      _doubleCheckOnly: true
     }));
 
   console.log(`[Paag] 1 card: PIX (${status}) | ${bancosDoubleCheck.length} bancos carregados para double check`);
@@ -614,19 +526,9 @@ async function consultarPaag() {
   };
 }
 
-// ─────────────────────────────────────────────
-// KYC — CONSULTA EM 2 ETAPAS
-//
-// Etapa 1: status.json  → indicator geral → UP / DEGRADED / DOWN
-// Etapa 2: summary.json → SOMENTE se não for UP → lista serviços afetados
-//
-// Resultado: SEMPRE 1 único card por processadora na dashboard
-// ─────────────────────────────────────────────
-
 async function consultarKYC(config) {
   console.log(`[${config.nome}] Consultando status.json...`);
 
-  // ── Etapa 1: status geral ──
   const { data: statusData, sucesso: statusOk, tipoErro: statusErro } =
     await httpGet(config.urlStatus);
 
@@ -657,7 +559,6 @@ async function consultarKYC(config) {
 
   console.log(`[${config.nome}] ✓ indicator="${indicator}" → ${statusGeral}`);
 
-  // ── Tudo operacional: card verde, sem buscar detalhes ──
   if (statusGeral === 'UP') {
     return {
       card: {
@@ -688,7 +589,6 @@ async function consultarKYC(config) {
     };
   }
 
-  // ── Há problema: busca summary.json para identificar serviços afetados ──
   console.log(`[${config.nome}] ⚠️  ${statusGeral} — buscando detalhes via summary.json...`);
 
   const { data: summaryData, sucesso: summaryOk } = await httpGet(config.urlSummary);
@@ -704,7 +604,6 @@ async function consultarKYC(config) {
     const grupos = {};
     rawComponents.filter(c => c.group === true).forEach(g => { grupos[g.id] = g.name; });
 
-    // Componentes individuais (para detalhes do card)
     const todosIndividuais = rawComponents
       .filter(c => c.group === false)
       .map(c => {
@@ -723,7 +622,6 @@ async function consultarKYC(config) {
         };
       });
 
-    // Serviços com problema → aparecem nos detalhes do card
     const afetados = todosIndividuais.filter(c => c.status !== 'UP');
     const nDown    = afetados.filter(c => c.status === 'DOWN').length;
     const nDeg     = afetados.filter(c => c.status === 'DEGRADED').length;
@@ -759,7 +657,6 @@ async function consultarKYC(config) {
     console.log(`[${config.nome}] ✓ ${afetados.length} serviço(s) afetado(s):`);
     afetados.forEach(c => console.log(`  ↳ ${c.nome}: ${c.label}`));
 
-    // Pega motivo do incidente mais recente
     const incKYC = (summaryData.incidents || []).find(i => i.status !== 'resolved');
     const motivoKYC = incKYC
       ? ((incKYC.incident_updates || [])[0]?.body || incKYC.name || mensagem)
@@ -816,11 +713,6 @@ async function consultarKYC(config) {
   };
 }
 
-// ─────────────────────────────────────────────
-// BACEN — SPI (Sistema de Pagamentos Instantâneos)
-// Fonte oficial do Banco Central sobre interrupções do PIX
-// ─────────────────────────────────────────────
-
 async function consultarBacen() {
   console.log(`[Bacen] Consultando PixInterrupcaoSPI...`);
   const inicio = Date.now();
@@ -850,9 +742,7 @@ async function consultarBacen() {
   const latencia = Date.now() - inicio;
   console.log(`[Bacen] ✓ Resposta em ${latencia}ms`);
 
-  const interrupcoes = (data.value || []);
-
-  // Filtra interrupções reais — ignora o registro "TOTAL" que é só sumário
+  const interrupcoes    = (data.value || []);
   const interrupcaoAtiva = interrupcoes.find(i =>
     i.DataHoraInicioInt &&
     i.DataHoraInicioInt !== 'TOTAL' &&
@@ -860,8 +750,8 @@ async function consultarBacen() {
     (!i.DataHoraTerminoInt || i.DataHoraTerminoInt === '-')
   );
 
-  let statusGeral = 'UP';
-  let mensagem    = 'SPI operacional — nenhuma interrupção ativa';
+  let statusGeral     = 'UP';
+  let mensagem        = 'SPI operacional — nenhuma interrupção ativa';
   let motivoIncidente = null;
 
   if (interrupcaoAtiva) {
@@ -909,10 +799,6 @@ async function consultarBacen() {
     manutencoes: []
   };
 }
-
-// ─────────────────────────────────────────────
-// CLOUDFLARE — BASEADO 100% EM INCIDENTS[]
-// ─────────────────────────────────────────────
 
 async function consultarCloudflare() {
   console.log(`[Cloudflare] Consultando summary.json...`);
@@ -991,13 +877,11 @@ async function consultarCloudflare() {
   let mensagem    = 'Nenhum incidente ativo';
 
   if (incidentesAtivos.length > 0) {
-    const inc = incidentesAtivos[0];
-    // DOWN apenas quando impacto for realmente crítico (critical)
-    // major, minor, maintenance → DEGRADED (incidente significativo mas sem queda total)
+    const inc        = incidentesAtivos[0];
     const isCritical = incidentesAtivos.some(i => i.impacto === 'critical');
-    statusGeral = isCritical ? 'DOWN' : 'DEGRADED';
-    labelGeral  = isCritical ? 'DOWN' : 'DEGRADAÇÃO';
-    mensagem    = inc.nome;
+    statusGeral      = isCritical ? 'DOWN' : 'DEGRADED';
+    labelGeral       = isCritical ? 'DOWN' : 'DEGRADAÇÃO';
+    mensagem         = inc.nome;
 
     console.log(`[Cloudflare] ⚠️  ${incidentesAtivos.length} incidente(s) ativo(s):`);
     incidentesAtivos.forEach(i => console.log(`  ↳ "${i.nome}" [${i.status}] impact=${i.impacto}`));
@@ -1005,11 +889,9 @@ async function consultarCloudflare() {
     console.log(`[Cloudflare] ✓ Nenhum incidente ativo`);
   }
 
-  // Pega último update do incidente mais recente para o motivo
   let motivoCloudflare = mensagem;
   if (incidentesAtivos.length > 0) {
-    const inc = incidentesAtivos[0];
-    const ultimoUpdate = inc.updates?.[0];
+    const ultimoUpdate = incidentesAtivos[0].updates?.[0];
     if (ultimoUpdate?.body) motivoCloudflare = ultimoUpdate.body;
   }
 
@@ -1051,10 +933,6 @@ async function consultarCloudflare() {
     manutencoes
   };
 }
-
-// ─────────────────────────────────────────────
-// ALERTAS — SLACK
-// ─────────────────────────────────────────────
 
 async function enviarSlack(componente, statusNovo, statusAnterior) {
   const emoji = { DOWN: '🔴', DEGRADED: '🟡', UP: '🟢' };
@@ -1135,10 +1013,6 @@ async function enviarSlack(componente, statusNovo, statusAnterior) {
   }
 }
 
-// ─────────────────────────────────────────────
-// ALERTAS — EMAIL
-// ─────────────────────────────────────────────
-
 async function enviarEmail(componente, statusNovo, statusAnterior) {
   if (!ALERT_EMAIL_TO || !SMTP_HOST || !SMTP_USER || !SMTP_PASS) return;
 
@@ -1208,10 +1082,6 @@ async function enviarEmail(componente, statusNovo, statusAnterior) {
   }
 }
 
-// ─────────────────────────────────────────────
-// VERIFICAR E DISPARAR ALERTAS
-// ─────────────────────────────────────────────
-
 async function verificarAlertas(componentes) {
   for (const c of componentes) {
     const anterior = estadoAnterior[c.id];
@@ -1243,10 +1113,6 @@ async function verificarAlertas(componentes) {
   }
 }
 
-// ─────────────────────────────────────────────
-// MONITORAMENTO PRINCIPAL
-// ─────────────────────────────────────────────
-
 async function monitorar() {
   console.log('\n' + '='.repeat(80));
   console.log(`[Monitor] ${new Date().toLocaleString('pt-BR')} — Consultando APIs...`);
@@ -1266,17 +1132,15 @@ async function monitorar() {
   const componentesCloudflare  = cloudflareResult.componentesInternos;
   const componentesBacen       = bacenResult.componentesInternos;
 
-  // ── Double Check: cruza bancos Okto x Paag e eleva status se divergir ──
-  const bancosDoubleCheck = paagResult.bancosDoubleCheck || [];
-  const conflitosDoubleCheck = aplicarDoubleCheck(componentesOkto, bancosDoubleCheck);
+  const bancosDoubleCheck      = paagResult.bancosDoubleCheck || [];
+  const conflitosDoubleCheck   = aplicarDoubleCheck(componentesOkto, bancosDoubleCheck);
   if (conflitosDoubleCheck.length > 0) {
     conflitosDoubleCheck.forEach(c =>
       console.log(`[DoubleCheck] 🔺 "${c.banco}" elevado para ${c.piorStatus} (Okto: ${c.statusOkto} | Paag: ${c.statusPaag})`)
     );
   }
 
-
-  const todosComponentes       = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare, ...componentesBacen];
+  const todosComponentes = [...componentesOkto, ...componentesPaag, ...componentesKYC, ...componentesCloudflare, ...componentesBacen];
 
   const todosIncidentes  = [
     ...(oktoResult.incidentes        || []),
@@ -1373,19 +1237,28 @@ async function monitorar() {
 
   const timestampCiclo = new Date().toISOString();
 
+  // Salva no historicoDia com todos os campos necessários para o endpoint de incidentes
   historicoDia.push({
     timestamp: timestampCiclo,
     hora:      new Date().toLocaleTimeString('pt-BR'),
     componentes: todosComponentes.map(c => ({
-      id: c.id, nome: c.nome, provedor: c.provedor,
-      categoria: c.categoria, grupo: c.grupo || null,
-      status: c.status, status_original: c.status_original
+      id:               c.id,
+      nome:             c.nome,
+      provedor:         c.provedor,
+      categoria:        c.categoria,
+      grupo:            c.grupo            || null,
+      status:           c.status,
+      status_original:  c.status_original,
+      double_check:     c.double_check     || false,
+      double_check_info: c.double_check_info || null,
+      motivo_incidente: c.motivo_incidente || null,
+      incidente_nome:   c.incidente_nome   || null,
+      incidente_url:    c.incidente_url    || null,
     }))
   });
 
   if (historicoDia.length > 1440) historicoDia.shift();
 
-  // ── Envia para Databricks (tabela GOLD) ──
   inserirNoDataBricks(
     todosComponentes.map(c => ({
       id:              c.id,
@@ -1426,10 +1299,6 @@ async function monitorar() {
   console.log('='.repeat(80) + '\n');
 }
 
-// ─────────────────────────────────────────────
-// ELEVAÇÃO DE STATUS POR ERROS DA PLATAFORMA
-// ─────────────────────────────────────────────
-
 function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
   const agora = Date.now();
 
@@ -1438,26 +1307,20 @@ function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
   }
 
   const estado = errosPlataforma[provedor];
-
-  // Adiciona o erro
   estado.erros.push({ timestamp: agora, rota, httpStatus, mensagem });
-
-  // Remove erros fora da janela de 5 minutos
   estado.erros = estado.erros.filter(e => agora - e.timestamp < ERRO_JANELA_MS);
 
-  const qtd = estado.erros.length;
+  const qtd  = estado.erros.length;
   const info = PROVEDORES_ACEITOS[provedor];
 
   console.log(`[ErroPlataforma] ${info.label} — ${qtd} erro(s) nos últimos 5min (threshold: ${ERRO_THRESHOLD}) | rota: ${rota} | HTTP ${httpStatus}`);
 
-  // Atingiu threshold → eleva status no dashboard
   if (qtd >= ERRO_THRESHOLD && !estado.statusElevado) {
     estado.statusElevado = true;
     estado.elevadoEm     = agora;
 
     console.log(`[ErroPlataforma] 🔺 ELEVANDO status de "${info.label}" para DEGRADED (${qtd} erros em 5min)`);
 
-    // Injeta no ultimosResultados em memória
     if (ultimosResultados.componentes) {
       ultimosResultados.componentes = ultimosResultados.componentes.map(c => {
         if (c.provedor === info.label && c.status === 'UP') {
@@ -1473,7 +1336,6 @@ function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
         return c;
       });
 
-      // Atualiza também componentes_dashboard
       ultimosResultados.componentes_dashboard = ultimosResultados.componentes_dashboard.map(c => {
         if (c.provedor === info.label && c.status === 'UP') {
           return { ...c, status: 'DEGRADED', label: 'DEGRADAÇÃO', plataforma_erro: true };
@@ -1481,23 +1343,18 @@ function processarErroPlataforma(provedor, rota, httpStatus, mensagem) {
         return c;
       });
 
-      // Recalcula resumo
       const nUp       = ultimosResultados.componentes.filter(c => c.status === 'UP').length;
       const nDegraded = ultimosResultados.componentes.filter(c => c.status === 'DEGRADED').length;
       const nDown     = ultimosResultados.componentes.filter(c => c.status === 'DOWN').length;
       ultimosResultados.resumo = { ...ultimosResultados.resumo, up: nUp, degraded: nDegraded, down: nDown };
 
-      // Dispara alerta Slack/Email imediatamente
       const componenteAfetado = ultimosResultados.componentes.find(c => c.provedor === info.label);
       if (componenteAfetado) {
         verificarAlertas([{ ...componenteAfetado, status: 'DEGRADED' }]).catch(() => {});
       }
-
-      // Estado elevado — Lovable atualiza via polling a cada 60s
     }
   }
 
-  // Auto-recuperação: se não chegarem novos erros por 10min, limpa o estado elevado
   if (estado.statusElevado) {
     clearTimeout(estado._recuperacaoTimer);
     estado._recuperacaoTimer = setTimeout(() => {
@@ -1519,22 +1376,81 @@ app.get('/api/status', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// POST /api/erros/reportar
-// Recebe erros da plataforma em tempo real
-//
-// Body esperado:
-// {
-//   "provedor":   "okto" | "paag" | "serasa" | "legitimuz" | "unico",
-//   "rota":       "/pix/transfer",        (opcional)
-//   "httpStatus": 503,                    (opcional)
-//   "mensagem":   "timeout após 30s"      (opcional)
-//   "token":      "seu-token-secreto"     (segurança básica)
-// }
+// GET /api/historico/incidentes
+// Retorna incidentes do dia (DEGRADED/DOWN) agrupados por componente
+// com horário real de início e fim de cada ocorrência
 // ─────────────────────────────────────────────
+app.get('/api/historico/incidentes', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+  const incidentesMap = {};
+
+  historicoDia.forEach(item => {
+    // 1. Fecha incidentes que voltaram para UP
+    item.componentes.forEach(c => {
+      if (c.status !== 'UP') return;
+      const chave = c.id;
+      if (incidentesMap[chave] && incidentesMap[chave].em_andamento) {
+        incidentesMap[chave].em_andamento = false;
+        incidentesMap[chave].fim          = item.timestamp;
+      }
+    });
+
+    // 2. Registra novos incidentes ou reabertura após resolução
+    item.componentes.forEach(c => {
+      if (c.status === 'UP') return;
+
+      const chave = c.id;
+
+      if (!incidentesMap[chave] || !incidentesMap[chave].em_andamento) {
+        // Se já existe mas foi resolvido, cria nova entrada com chave única
+        const chaveUnica = (incidentesMap[chave] && !incidentesMap[chave].em_andamento)
+          ? `${c.id}_${item.timestamp}`
+          : c.id;
+
+        incidentesMap[chaveUnica] = {
+          id:               c.id,
+          nome:             c.nome,
+          provedor:         c.provedor,
+          categoria:        c.categoria,
+          grupo:            c.grupo            || null,
+          status:           c.status,
+          status_original:  c.status_original,
+          motivo_incidente: c.motivo_incidente || null,
+          incidente_nome:   c.incidente_nome   || null,
+          incidente_url:    c.incidente_url    || null,
+          double_check:     c.double_check     || false,
+          double_check_info: c.double_check_info || null,
+          inicio:           item.timestamp,
+          fim:              null,
+          em_andamento:     true
+        };
+      } else {
+        // Incidente continua ativo — atualiza status mas preserva horário de início
+        incidentesMap[chave].status          = c.status;
+        incidentesMap[chave].motivo_incidente = c.motivo_incidente || incidentesMap[chave].motivo_incidente;
+        incidentesMap[chave].incidente_nome   = c.incidente_nome   || incidentesMap[chave].incidente_nome;
+      }
+    });
+  });
+
+  const incidentes = Object.values(incidentesMap)
+    .sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
+
+  res.json({
+    total:         incidentes.length,
+    em_andamento:  incidentes.filter(i => i.em_andamento).length,
+    resolvidos:    incidentes.filter(i => !i.em_andamento).length,
+    data:          new Date().toLocaleDateString('pt-BR'),
+    atualizado_em: new Date().toISOString(),
+    incidentes
+  });
+});
+
 app.post('/api/erros/reportar', (req, res) => {
   const { provedor, rota, httpStatus, mensagem, token } = req.body || {};
 
-  // Validação de token (configura MONITOR_TOKEN no Render)
   const MONITOR_TOKEN = process.env.MONITOR_TOKEN;
   if (MONITOR_TOKEN && token !== MONITOR_TOKEN) {
     return res.status(401).json({ erro: 'Token inválido' });
@@ -1557,7 +1473,6 @@ app.post('/api/erros/reportar', (req, res) => {
   res.json({ ok: true, provedor: provedor.toLowerCase(), recebido_em: new Date().toISOString() });
 });
 
-// GET /api/erros — visualiza erros recentes reportados pela plataforma
 app.get('/api/erros', (req, res) => {
   const agora = Date.now();
   const resumo = {};
@@ -1712,10 +1627,10 @@ app.listen(PORTA, '0.0.0.0', () => {
   console.log(`\nIgnorados Okto : ${IGNORADOS_OKTO.join(' | ')}`);
   console.log(`Slack          : ✓ webhook ativo | Menções: ${SLACK_MENTIONS.length} usuários`);
   console.log(`Email          : ${ALERT_EMAIL_TO ? '✓ configurado' : '✗ não configurado'}`);
+  console.log(`\nNovo endpoint  : GET /api/historico/incidentes`);
   console.log('='.repeat(65) + '\n');
 
   iniciarKeepAlive();
   monitorar();
   setInterval(monitorar, INTERVALO_SEGUNDOS * 1000);
-
 });
