@@ -1378,73 +1378,72 @@ app.get('/api/status', (req, res) => {
 // ─────────────────────────────────────────────
 // GET /api/historico/incidentes
 // Retorna incidentes do dia (DEGRADED/DOWN) agrupados por componente
-// com horário real de início e fim de cada ocorrência
+// com horário real de início e fim — 1 registro por ocorrência, sem duplicatas
 // ─────────────────────────────────────────────
 app.get('/api/historico/incidentes', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-  const incidentesMap = {};
+  // incidentesAtivos: componente id → incidente em andamento
+  const incidentesAtivos = {};
+  // todosIncidentes: lista final (ativos + resolvidos)
+  const todosIncidentes  = [];
 
   historicoDia.forEach(item => {
-    // 1. Fecha incidentes que voltaram para UP
     item.componentes.forEach(c => {
-      if (c.status !== 'UP') return;
-      const chave = c.id;
-      if (incidentesMap[chave] && incidentesMap[chave].em_andamento) {
-        incidentesMap[chave].em_andamento = false;
-        incidentesMap[chave].fim          = item.timestamp;
-      }
-    });
-
-    // 2. Registra novos incidentes ou reabertura após resolução
-    item.componentes.forEach(c => {
-      if (c.status === 'UP') return;
-
       const chave = c.id;
 
-      if (!incidentesMap[chave] || !incidentesMap[chave].em_andamento) {
-        // Se já existe mas foi resolvido, cria nova entrada com chave única
-        const chaveUnica = (incidentesMap[chave] && !incidentesMap[chave].em_andamento)
-          ? `${c.id}_${item.timestamp}`
-          : c.id;
-
-        incidentesMap[chaveUnica] = {
-          id:               c.id,
-          nome:             c.nome,
-          provedor:         c.provedor,
-          categoria:        c.categoria,
-          grupo:            c.grupo            || null,
-          status:           c.status,
-          status_original:  c.status_original,
-          motivo_incidente: c.motivo_incidente || null,
-          incidente_nome:   c.incidente_nome   || null,
-          incidente_url:    c.incidente_url    || null,
-          double_check:     c.double_check     || false,
-          double_check_info: c.double_check_info || null,
-          inicio:           item.timestamp,
-          fim:              null,
-          em_andamento:     true
-        };
+      if (c.status === 'UP') {
+        // Componente voltou ao normal — fecha incidente ativo se existir
+        if (incidentesAtivos[chave]) {
+          incidentesAtivos[chave].em_andamento = false;
+          incidentesAtivos[chave].fim          = item.timestamp;
+          delete incidentesAtivos[chave];
+        }
       } else {
-        // Incidente continua ativo — atualiza status mas preserva horário de início
-        incidentesMap[chave].status          = c.status;
-        incidentesMap[chave].motivo_incidente = c.motivo_incidente || incidentesMap[chave].motivo_incidente;
-        incidentesMap[chave].incidente_nome   = c.incidente_nome   || incidentesMap[chave].incidente_nome;
+        // DEGRADED ou DOWN
+        if (!incidentesAtivos[chave]) {
+          // Novo incidente — cria e adiciona na lista final
+          const novoIncidente = {
+            id:               `${c.id}_${item.timestamp}`,
+            nome:             c.nome,
+            provedor:         c.provedor,
+            categoria:        c.categoria,
+            grupo:            c.grupo             || null,
+            status:           c.status,
+            status_original:  c.status_original,
+            motivo_incidente: c.motivo_incidente  || null,
+            incidente_nome:   c.incidente_nome    || null,
+            incidente_url:    c.incidente_url     || null,
+            double_check:     c.double_check      || false,
+            double_check_info: c.double_check_info || null,
+            inicio:           item.timestamp,
+            fim:              null,
+            em_andamento:     true
+          };
+          incidentesAtivos[chave] = novoIncidente;
+          todosIncidentes.push(novoIncidente);
+        } else {
+          // Incidente já existe e continua ativo
+          // Apenas atualiza status e motivo — NÃO cria novo registro
+          incidentesAtivos[chave].status           = c.status;
+          incidentesAtivos[chave].motivo_incidente  = c.motivo_incidente || incidentesAtivos[chave].motivo_incidente;
+          incidentesAtivos[chave].incidente_nome    = c.incidente_nome   || incidentesAtivos[chave].incidente_nome;
+        }
       }
     });
   });
 
-  const incidentes = Object.values(incidentesMap)
+  const incidentesOrdenados = todosIncidentes
     .sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
 
   res.json({
-    total:         incidentes.length,
-    em_andamento:  incidentes.filter(i => i.em_andamento).length,
-    resolvidos:    incidentes.filter(i => !i.em_andamento).length,
+    total:         incidentesOrdenados.length,
+    em_andamento:  incidentesOrdenados.filter(i => i.em_andamento).length,
+    resolvidos:    incidentesOrdenados.filter(i => !i.em_andamento).length,
     data:          new Date().toLocaleDateString('pt-BR'),
     atualizado_em: new Date().toISOString(),
-    incidentes
+    incidentes:    incidentesOrdenados
   });
 });
 
